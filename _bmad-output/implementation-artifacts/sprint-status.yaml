@@ -1,0 +1,67 @@
+# generated: 2026-06-11T07:33:10+02:00
+# last_updated: 2026-06-11T07:33:10+02:00
+# project: YGO ULTIME DECK
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: c:/Users/kevin/Downloads/Projet code/YGO ULTIME DECK/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-06-11T07:33:10+02:00
+last_updated: 2026-06-11T07:35:05+02:00
+project: YGO ULTIME DECK
+project_key: NOKEY
+tracking_system: file-system
+story_location: c:/Users/kevin/Downloads/Projet code/YGO ULTIME DECK/_bmad-output/implementation-artifacts
+
+development_status:
+  epic-1: in-progress
+  1-1-initialisation-du-projet-socle-cli-typer: in-progress
+  1-2-modeles-de-donnees-pydantic-schema-v0-6-0: backlog
+  1-3-telechargeur-ygojson-gestion-du-cache: backlog
+  1-4-parseur-resilient-pre-filtrage-memoire: backlog
+  epic-1-retrospective: optional
+  epic-2: backlog
+  2-1-moteur-d-expressions-regulieres-regex-psct: backlog
+  2-2-fichier-de-configuration-externe-tags-rules-yaml: backlog
+  2-3-implementation-du-multi-tagging-dynamique: backlog
+  epic-2-retrospective: optional
+  epic-3: backlog
+  3-1-algorithme-hypergeometrique-logarithmique: backlog
+  3-2-parseur-des-mains-de-reve-target-combos-yaml: backlog
+  3-3-moteur-de-simulation-monte-carlo-multiprocessing: backlog
+  3-4-resolution-des-resource-generators-pioche-dynamique: backlog
+  epic-3-retrospective: optional
+  epic-4: backlog
+  4-1-parseur-des-menaces-de-la-meta-meta-targets-yaml: backlog
+  4-2-simulation-de-l-immunite-counter-matching: backlog
+  4-3-optimiseur-dynamique-de-taille-de-deck-40-a-60-cartes: backlog
+  4-4-module-d-audit-cli-et-exportation-ydk: backlog
+  epic-4-retrospective: optional
