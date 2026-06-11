@@ -1,12 +1,13 @@
 [project]
 name = "ygo-ultime-deck"
 version = "0.1.0"
-description = "Add your description here"
+description = "Moteur d'optimisation de deck Yu-Gi-Oh!"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.13.4",
     "pyyaml>=6.0.3",
+    "rich>=13.0.0",
     "typer>=0.26.7",
 ]
 
