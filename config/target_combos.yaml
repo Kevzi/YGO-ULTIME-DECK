@@ -1,0 +1,25 @@
+# Fichier de configuration des combos ("Mains de Rêve")
+# ----------------------------------------------------
+# Chaque combo définit un scénario de victoire.
+# Le moteur va analyser la main piochée et vérifier si elle 
+# satisfait l'un de ces combos.
+
+combos:
+  - name: "Full Combo (Standard)"
+    requirements:
+      - name: "Starter"
+        count: 1
+      - name: "Extender"
+        count: 1
+
+  - name: "Combo Sécurisé (Anti-Handtrap)"
+    requirements:
+      - name: "Starter"
+        count: 1
+      - name: "Protection"
+        count: 1
+
+  - name: "One-Card Combo (Minimal)"
+    requirements:
+      - name: "1-Card-Starter"
+        count: 1

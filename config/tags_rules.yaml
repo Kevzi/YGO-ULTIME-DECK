@@ -1,0 +1,12 @@
+# Fichier de configuration des règles de tags (tags_rules.yaml)
+# Définissez ici les Regex pour catégoriser vos cartes.
+# Les clés sont les noms des tags, les valeurs sont les Regex correspondantes.
+#
+# NOTE : La sensibilité à la casse est respectée par défaut.
+# Si vous souhaitez qu'une règle ignore la casse, commencez-la par `(?i)`.
+# Exemple : `(?i)add .* from your deck to your hand`
+
+Starter: '(?i)Normal Summon.*add.*from your Deck to your hand'
+Extender: '(?i)Special Summon this card'
+HandTrap: '(?i)Discard this card.*negate that effect'
+BoardBreaker: '(?i)destroy all monsters your opponent controls'
