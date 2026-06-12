@@ -43,13 +43,8 @@ def load_and_parse_ygojson(zip_path: Path) -> List[CardModel]:
                     if not isinstance(card_data, dict):
                         continue
                         
-                    # Filtrage des formats (TCG ou OCG doivent être présents)
-                    formats = card_data.get("formats", [])
-                    if not isinstance(formats, list):
-                        continue
-                        
-                    if "TCG" not in formats and "OCG" not in formats:
-                        continue
+                    # On ne filtre plus les formats (TCG, OCG, Rush) car certaines cartes (custom, anime) 
+                    # ont 'formats': None et doivent quand même être parsées si elles sont dans un YDK.
                         
                     # Filtrage de la Banlist (Ignorer les cartes illégales)
                     banlist_info = card_data.get("banlist_info", {})

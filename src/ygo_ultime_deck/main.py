@@ -366,19 +366,33 @@ def break_meta(
     console.print(f"[green]Succès : {analysis['scouted_cards_count']} cartes stratégiques scoutées.[/green]\n")
     
     # Afficher les pires contres de la méta
-    table_c = Table(title="Top Ultimate Staples (Contres Méta)", box=box.ROUNDED, title_style="bold red")
-    table_c.add_column("Carte de Contre", style="red")
-    table_c.add_column("Score (Fréquence)", justify="right", style="yellow")
-    
-    for counter, score in analysis["top_counters"]:
-        table_c.add_row(counter, str(score))
+    if analysis["top_counters"]:
+        table_c = Table(title="Top Ultimate Staples (Contres Méta)", box=box.ROUNDED, title_style="bold red")
+        table_c.add_column("Carte de Contre", style="red")
+        table_c.add_column("Score (Fréquence)", justify="right", style="yellow")
         
-    console.print(table_c)
+        for counter, score in analysis["top_counters"]:
+            table_c.add_row(counter, str(score))
+            
+        console.print(table_c)
+    else:
+        console.print("[yellow]Aucun contre commun n'a pu être déterminé pour cette méta.[/yellow]")
+        
+    # Afficher les synergies de la méta (pour info)
+    if analysis["top_synergies"]:
+        table_ms = Table(title="Top Synergies du Deck Méta", box=box.ROUNDED, title_style="bold cyan")
+        table_ms.add_column("Synergie Mentionnée", style="cyan")
+        table_ms.add_column("Mentions", justify="right", style="white")
+        
+        for syn, score in analysis["top_synergies"]:
+            table_ms.add_row(syn, str(score))
+            
+        console.print(table_ms)
     
     # Reverse Scouting sur le Top 5
     top_5_staples = analysis["ultimate_staples"][:5]
     if not top_5_staples:
-        console.print("[yellow]Impossible de déterminer des contres communs.[/yellow]")
+        console.print("\n[italic dim]Astuce : Fournissez un deck Méta documenté sur Yugipedia (ex: Snake-Eye) pour obtenir des recommandations d'archétypes de contre.[/italic dim]")
         return
         
     console.print("\n[bold blue]Lancement du Reverse-Scouting sur le Top 5 des Staples...[/bold blue]")

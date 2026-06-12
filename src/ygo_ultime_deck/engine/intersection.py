@@ -90,6 +90,7 @@ async def analyze_meta(deck_files: List[Path], cache_path: Path) -> Dict[str, an
     
     # 4. Agréger et pondérer les contres (Intersection)
     counter_freq = Counter()
+    meta_synergies_freq = Counter()
     
     for res in scout_results:
         if res["found"]:
@@ -107,12 +108,16 @@ async def analyze_meta(deck_files: List[Path], cache_path: Path) -> Dict[str, an
                         
                 counter_freq[counter] += weight
                 
+            for synergy in res.get("synergies", []):
+                meta_synergies_freq[synergy] += 1
+                
     # Extraire le Top 10 des "Ultimate Staples"
     top_staples = [c[0] for c in counter_freq.most_common(10)]
     
     return {
         "scouted_cards_count": len(cards_to_scout_names),
         "top_counters": counter_freq.most_common(15),
+        "top_synergies": meta_synergies_freq.most_common(15),
         "ultimate_staples": top_staples
     }
 
