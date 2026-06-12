@@ -66,6 +66,6 @@ development_status:
   4-4-module-d-audit-cli-et-exportation-ydk: done
   epic-4-retrospective: optional
   epic-5: backlog
-  5-1-moteur-de-resolution-de-noms-en-ids: backlog
+  5-1-moteur-de-resolution-de-noms-en-ids: done
   5-2-integration-de-la-resolution-dans-l-audit-cli: backlog
   epic-5-retrospective: optional
