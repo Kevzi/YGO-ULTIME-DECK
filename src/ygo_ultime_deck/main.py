@@ -110,6 +110,10 @@ def audit(
     from ygo_ultime_deck.engine.monte_carlo import run_monte_carlo_simulation
     from ygo_ultime_deck.engine.optimizer import optimize_deck_size
     from ygo_ultime_deck.engine.exporter import generate_ydk
+    from ygo_ultime_deck.engine.resolver import CardResolver
+    import logging
+    
+    logger = logging.getLogger(__name__)
     
     console.print(Panel.fit("[bold magenta]AUDIT DECK ULTIME[/bold magenta]", border_style="magenta"))
     
@@ -146,11 +150,36 @@ def audit(
         except Exception as e:
             console.print(f"[bold red]Erreur Simulation :[/bold red] {e}")
     
-    # 3. Export YDK (Mock IDs for now)
-    # Les IDs utilisés ici sont des IDs communs pour tester l'export en attendant l'Epic 5 (Base de données)
-    # 14558127 = Ash Blossom
+    # 3. Export YDK
+    # Récupération des vrais noms depuis target_combos.yaml si disponibles
+    export_names = []
+    if request and request.combos:
+        for combo in request.combos:
+            if not combo.requirements:
+                continue
+            for req in combo.requirements:
+                # Ajoute chaque carte selon son nombre d'exemplaires requis (max 3 par convention, ou opt_size)
+                count = int(req.count) if isinstance(req.count, (int, str)) and str(req.count).isdigit() else 1
+                for _ in range(count):
+                    export_names.append(req.name)
+                    
+    # Compléter avec des cartes génériques si on n'atteint pas opt_size
+    remaining = max(0, opt_size - len(export_names))
+    if remaining > 0:
+        export_names.extend(["Generic Card"] * remaining)
+        
+    # Tronquer si on dépasse la taille opt_size
+    if len(export_names) > opt_size:
+        logger.warning(f"La configuration demande plus de cartes ({len(export_names)}) que la taille optimale ({opt_size}). Troncature silencieuse.")
+        export_names = export_names[:opt_size]
+    
+    # Résolution des IDs (Seulement si l'exportation est nécessaire, on le fait juste avant de générer le YDK)
+    cache_path = Path(__file__).resolve().parent.parent.parent / "data" / "cache" / "aggregate.zip"
+    resolver = CardResolver(cache_path)
+    resolved_ids = resolver.resolve(export_names)
+    
     decklist = {
-        "main": [14558127] * opt_size,
+        "main": resolved_ids,
         "extra": [],
         "side": []
     }
