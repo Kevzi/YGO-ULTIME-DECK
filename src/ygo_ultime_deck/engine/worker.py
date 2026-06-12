@@ -1,6 +1,9 @@
 import random
+import re
 from typing import List, Dict, Any
 from ygo_ultime_deck.models.simulation import SimulationResult
+
+DRAW_REGEX = re.compile(r"^(?:Draw|Excavate)-(\d+)$", re.IGNORECASE)
 
 def simulate_chunk(deck: List[str], combos: List[Dict[str, Any]], hand_size: int, iterations: int) -> SimulationResult:
     """
@@ -25,12 +28,27 @@ def simulate_chunk(deck: List[str], combos: List[Dict[str, Any]], hand_size: int
                 parsed_reqs.append((req.get("name"), count))
         parsed_combos.append({"name": combo["name"], "requirements": parsed_reqs})
 
+    deck_size = len(deck)
+
     for _ in range(iterations):
-        hand = random.sample(deck, k=hand_size)
+        # We need to sample hand_size + any extra cards. But we don't know the extra cards until we check the hand.
+        # Sampling the whole deck size is fast enough for small lists, but to be truly optimal and avoid deck[:] slice,
+        # we can just use random.sample for the initial hand, and if we need more, sample from the remainder.
+        # But `random.sample` returns a list, computing the remainder is O(N).
+        # A simple optimization: for YGO decks (40-60 cards), `random.sample(deck, deck_size)` creates a shuffled copy.
+        # It is actually faster to just `random.sample(deck, deck_size)` than `deck[:]` and `random.shuffle`.
+        shuffled_deck = random.sample(deck, deck_size)
+        hand = shuffled_deck[:hand_size]
+        
         hand_counts = {}
+        total_draw = 0
         for card in hand:
             hand_counts[card] = hand_counts.get(card, 0) + 1
+            match = DRAW_REGEX.match(card)
+            if match:
+                total_draw += int(match.group(1))
 
+        failed_combos = []
         for combo in parsed_combos:
             success = True
             for req_name, req_count in combo["requirements"]:
@@ -40,6 +58,22 @@ def simulate_chunk(deck: List[str], combos: List[Dict[str, Any]], hand_size: int
             
             if success:
                 combo_successes[combo["name"]] += 1
+            else:
+                failed_combos.append(combo)
+                
+        if failed_combos and total_draw > 0:
+            extra_cards = shuffled_deck[hand_size:hand_size + total_draw]
+            for card in extra_cards:
+                hand_counts[card] = hand_counts.get(card, 0) + 1
+                
+            for combo in failed_combos:
+                success = True
+                for req_name, req_count in combo["requirements"]:
+                    if hand_counts.get(req_name, 0) < req_count:
+                        success = False
+                        break
+                if success:
+                    combo_successes[combo["name"]] += 1
 
     return SimulationResult(
         total_iterations=iterations,
