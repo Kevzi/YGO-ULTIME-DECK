@@ -7,6 +7,9 @@ from typing import Optional
 
 import typer
 from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich import box
 
 app = typer.Typer(help="Moteur d'optimisation de deck Yu-Gi-Oh! (YGO ULTIME DECK)", rich_markup_mode="rich")
 console = Console()
@@ -89,6 +92,100 @@ def simulate(
     for combo_name, successes in result.combo_success_rates.items():
         rate = (successes / result.total_iterations) * 100
         console.print(f" - {combo_name} : {rate:.2f}% ({successes}/{result.total_iterations})")
+
+@app.command()
+def audit(
+    iterations: int = typer.Option(100000, "--iterations", "-i", help="Nombre d'itérations de simulation"),
+    hand_size: int = typer.Option(5, "--hand-size", "-h", help="Taille de la main"),
+    workers: Optional[int] = typer.Option(None, "--workers", "-w", help="Workers multiprocessing"),
+    starters: int = typer.Option(12, "--starters", "-s", help="Nombre de Starters"),
+    garnets: int = typer.Option(2, "--garnets", "-g", help="Nombre de Garnets"),
+    core: int = typer.Option(25, "--core", "-c", help="Taille du Core Engine"),
+    output: Path = typer.Option(Path("output/decklist_ultime.ydk"), "--output", "-o", help="Chemin d'export du .ydk")
+):
+    """
+    Exécute l'audit complet : Optimisation de taille, Simulation (Immunités), et Export YDK.
+    """
+    from ygo_ultime_deck.engine.config_parser import parse_target_combos
+    from ygo_ultime_deck.engine.monte_carlo import run_monte_carlo_simulation
+    from ygo_ultime_deck.engine.optimizer import optimize_deck_size
+    from ygo_ultime_deck.engine.exporter import generate_ydk
+    
+    console.print(Panel.fit("[bold magenta]AUDIT DECK ULTIME[/bold magenta]", border_style="magenta"))
+    
+    # 1. Optimisation de la taille du deck
+    try:
+        opt_result = optimize_deck_size(starters, garnets, core)
+        opt_size = opt_result["optimal_size"]
+        p_starter = opt_result["metrics"]["p_starter"] * 100
+        p_garnet = (1.0 - opt_result["metrics"]["p_no_garnet"]) * 100
+    except ValueError as e:
+        console.print(f"[bold red]Erreur Optimiseur :[/bold red] {e}")
+        raise typer.Exit(1)
+        
+    # 2. Simulation Monte-Carlo
+    config_path = Path(__file__).resolve().parent.parent.parent / "config" / "target_combos.yaml"
+    try:
+        request = parse_target_combos(config_path)
+    except Exception as e:
+        console.print(f"[bold yellow]Avertissement (Config) :[/bold yellow] Impossible de charger target_combos.yaml : {e}")
+        request = None
+        
+    sim_result = None
+    if request:
+        # Deck mock pour la simulation basé sur l'optimiseur
+        # On respecte le core (si renseigné) et on ne dépasse pas la taille
+        num_bricks = max(0, opt_size - starters - garnets - core)
+        deck = ["Starter"] * starters + ["Garnet"] * garnets + ["Extender"] * core + ["Brick"] * num_bricks
+        
+        # S'assurer qu'on ne dépasse pas la taille stricte (les bricks seront tronquées si la somme > opt_size)
+        deck = deck[:opt_size]
+        
+        try:
+            sim_result = asyncio.run(run_monte_carlo_simulation(deck, request, hand_size, iterations, workers))
+        except Exception as e:
+            console.print(f"[bold red]Erreur Simulation :[/bold red] {e}")
+    
+    # 3. Export YDK (Mock IDs for now)
+    # Les IDs utilisés ici sont des IDs communs pour tester l'export en attendant l'Epic 5 (Base de données)
+    # 14558127 = Ash Blossom
+    decklist = {
+        "main": [14558127] * opt_size,
+        "extra": [],
+        "side": []
+    }
+    export_success = False
+    try:
+        generate_ydk(decklist, output)
+        export_success = True
+    except Exception as e:
+        console.print(f"[bold red]Erreur Export :[/bold red] {e}")
+        
+    # 4. Affichage du Rapport Rich
+    table = Table(title="Rapport d'Audit Yu-Gi-Oh!", box=box.ROUNDED)
+    table.add_column("Métrique", style="cyan", no_wrap=True)
+    table.add_column("Valeur", justify="right", style="green")
+    
+    table.add_row("Taille de Deck Optimale", f"{opt_size} cartes")
+    table.add_row("Consistance (Starter >= 1)", f"{p_starter:.2f}%")
+    table.add_row("Risque de Brick (Garnet >= 1)", f"{p_garnet:.2f}%")
+    
+    if sim_result and sim_result.total_iterations > 0:
+        for combo_name, successes in sim_result.combo_success_rates.items():
+            rate = (successes / sim_result.total_iterations) * 100
+            table.add_row(f"Combo: {combo_name}", f"{rate:.2f}%")
+            
+            # Immunity stats
+            if combo_name in sim_result.immunity_success_rates:
+                for threat, imm_succ in sim_result.immunity_success_rates[combo_name].items():
+                    # Immunity is calculated over the successful hands
+                    if successes > 0:
+                        imm_rate = (imm_succ / successes) * 100
+                        table.add_row(f" └─ Immunité vs {threat}", f"{imm_rate:.2f}%")
+                        
+    console.print(table)
+    if export_success:
+        console.print(f"[italic dim]Decklist exportée vers: {output}[/italic dim]")
 
 if __name__ == "__main__":
     app()
