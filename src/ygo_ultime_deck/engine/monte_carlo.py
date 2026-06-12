@@ -8,7 +8,7 @@ from rich.progress import Progress
 from ygo_ultime_deck.models.simulation import SimulationRequest, SimulationResult
 from ygo_ultime_deck.engine.worker import simulate_chunk
 
-async def run_monte_carlo_simulation(deck: List[str], request: SimulationRequest, hand_size: int = 5, iterations: int = 100000, workers: int = None) -> SimulationResult:
+async def run_monte_carlo_simulation(deck: List[str], request: SimulationRequest, hand_size: int = 5, iterations: int = 100000, workers: int = None, threats: List[dict] = None) -> SimulationResult:
     """
     Run the Monte-Carlo simulation using ProcessPoolExecutor.
     """
@@ -36,7 +36,16 @@ async def run_monte_carlo_simulation(deck: List[str], request: SimulationRequest
 
     loop = asyncio.get_running_loop()
     
-    total_result = SimulationResult(total_iterations=0, combo_success_rates={c.name: 0 for c in request.combos})
+    total_result = SimulationResult(
+        total_iterations=0, 
+        combo_success_rates={c.name: 0 for c in request.combos},
+        immunity_success_rates={c.name: {} for c in request.combos}
+    )
+    if threats:
+        for c in request.combos:
+            for t in threats:
+                t_name = t.get("name", "Unknown")
+                total_result.immunity_success_rates[c.name][t_name] = 0
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
         # We use a progress bar
@@ -52,7 +61,8 @@ async def run_monte_carlo_simulation(deck: List[str], request: SimulationRequest
                     deck, 
                     combos_data, 
                     hand_size, 
-                    chunk_iterations
+                    chunk_iterations,
+                    threats
                 )
                 futures.append(future)
             
@@ -63,6 +73,10 @@ async def run_monte_carlo_simulation(deck: List[str], request: SimulationRequest
                 total_result.total_iterations += chunk_result.total_iterations
                 for combo_name, successes in chunk_result.combo_success_rates.items():
                     total_result.combo_success_rates[combo_name] += successes
+                for combo_name, threat_dict in chunk_result.immunity_success_rates.items():
+                    target_threat_dict = total_result.immunity_success_rates.setdefault(combo_name, {})
+                    for threat_name, successes in threat_dict.items():
+                        target_threat_dict[threat_name] = target_threat_dict.get(threat_name, 0) + successes
                 
                 progress.advance(task, chunk_result.total_iterations)
 

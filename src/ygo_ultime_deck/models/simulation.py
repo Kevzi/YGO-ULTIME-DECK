@@ -19,3 +19,4 @@ class SimulationResult(BaseModel):
     model_config = ConfigDict(extra='forbid')
     total_iterations: int = Field(ge=0)
     combo_success_rates: dict[str, int] = Field(default_factory=dict)
+    immunity_success_rates: dict[str, dict[str, int]] = Field(default_factory=dict)

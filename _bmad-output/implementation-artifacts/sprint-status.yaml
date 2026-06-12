@@ -61,7 +61,7 @@ development_status:
   epic-3-retrospective: optional
   epic-4: in-progress
   4-1-parseur-des-menaces-de-la-meta-meta-targets-yaml: done
-  4-2-simulation-de-l-immunite-counter-matching: ready-for-dev
-  4-3-optimiseur-dynamique-de-taille-de-deck-40-a-60-cartes: backlog
+  4-2-simulation-de-l-immunite-counter-matching: done
+  4-3-optimiseur-dynamique-de-taille-de-deck-40-a-60-cartes: ready-for-dev
   4-4-module-d-audit-cli-et-exportation-ydk: backlog
   epic-4-retrospective: optional
