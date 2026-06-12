@@ -56,7 +56,8 @@ def update():
 def simulate(
     iterations: int = typer.Option(100000, "--iterations", "-i", help="Nombre d'itérations de simulation"),
     hand_size: int = typer.Option(5, "--hand-size", "-h", help="Taille de la main de départ"),
-    workers: Optional[int] = typer.Option(None, "--workers", "-w", help="Nombre de processus à utiliser")
+    workers: Optional[int] = typer.Option(None, "--workers", "-w", help="Nombre de processus à utiliser"),
+    file: Path = typer.Option(Path("config/target_combos.yaml"), "--file", "-f", help="Chemin vers le fichier YAML des combos")
 ):
     """
     Simule la probabilité de réussite des combos cibles via Monte-Carlo.
@@ -64,11 +65,9 @@ def simulate(
     from ygo_ultime_deck.engine.config_parser import parse_target_combos
     from ygo_ultime_deck.engine.monte_carlo import run_monte_carlo_simulation
     
-    config_path = Path(__file__).resolve().parent.parent.parent / "config" / "target_combos.yaml"
-    
     # Parser les combos depuis le fichier config
     try:
-        request = parse_target_combos(config_path)
+        request = parse_target_combos(str(file))
     except Exception as e:
         console.print(f"[bold red]Erreur de lecture des combos :[/bold red] {e}")
         raise typer.Exit(1)
@@ -102,7 +101,8 @@ def audit(
     starters: int = typer.Option(12, "--starters", "-s", help="Nombre de Starters"),
     garnets: int = typer.Option(2, "--garnets", "-g", help="Nombre de Garnets"),
     core: int = typer.Option(25, "--core", "-c", help="Taille du Core Engine"),
-    output: Path = typer.Option(Path("output/decklist_ultime.ydk"), "--output", "-o", help="Chemin d'export du .ydk")
+    output: Path = typer.Option(Path("output/decklist_ultime.ydk"), "--output", "-o", help="Chemin d'export du .ydk"),
+    file: Path = typer.Option(Path("config/target_combos.yaml"), "--file", "-f", help="Chemin vers le fichier YAML des combos")
 ):
     """
     Exécute l'audit complet : Optimisation de taille, Simulation (Immunités), et Export YDK.
@@ -129,9 +129,8 @@ def audit(
         raise typer.Exit(1)
         
     # 2. Simulation Monte-Carlo
-    config_path = Path(__file__).resolve().parent.parent.parent / "config" / "target_combos.yaml"
     try:
-        request = parse_target_combos(config_path)
+        request = parse_target_combos(str(file))
     except Exception as e:
         console.print(f"[bold yellow]Avertissement (Config) :[/bold yellow] Impossible de charger target_combos.yaml : {e}")
         request = None
