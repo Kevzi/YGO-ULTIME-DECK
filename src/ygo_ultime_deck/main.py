@@ -3,7 +3,7 @@
 import sys
 import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import typer
 from rich.console import Console
@@ -337,6 +337,67 @@ def scout(
         console.print(table_s)
         
     console.print(f"[italic dim]{len(counters)} contres et {len(synergies)} synergies identifiés.[/italic dim]")
+
+@app.command(name="break-meta")
+def break_meta(
+    decks: List[Path] = typer.Argument(..., help="Fichiers .ydk représentant la méta à analyser")
+):
+    """
+    Analyse plusieurs decks méta, extrait leurs faiblesses communes, et recommande un archétype de contre (Reverse-Scouting).
+    """
+    from ygo_ultime_deck.engine.intersection import analyze_meta, find_matching_archetypes
+    
+    console.print(Panel.fit("[bold magenta]META-BREAKER : ANALYSE EN COURS[/bold magenta]", border_style="magenta"))
+    
+    for d in decks:
+        if not d.exists():
+            console.print(f"[bold red]Erreur :[/bold red] Fichier introuvable {d}")
+            raise typer.Exit(1)
+            
+    cache_path = Path(__file__).resolve().parent.parent.parent / "data" / "cache" / "aggregate.zip"
+    
+    with console.status("[cyan]Analyse des decks et requêtes Yugipedia (Scout)...[/cyan]"):
+        try:
+            analysis = asyncio.run(analyze_meta(decks, cache_path))
+        except Exception as e:
+            console.print(f"[bold red]Erreur lors de l'analyse :[/bold red] {e}")
+            raise typer.Exit(1)
+            
+    console.print(f"[green]Succès : {analysis['scouted_cards_count']} cartes stratégiques scoutées.[/green]\n")
+    
+    # Afficher les pires contres de la méta
+    table_c = Table(title="Top Ultimate Staples (Contres Méta)", box=box.ROUNDED, title_style="bold red")
+    table_c.add_column("Carte de Contre", style="red")
+    table_c.add_column("Score (Fréquence)", justify="right", style="yellow")
+    
+    for counter, score in analysis["top_counters"]:
+        table_c.add_row(counter, str(score))
+        
+    console.print(table_c)
+    
+    # Reverse Scouting sur le Top 5
+    top_5_staples = analysis["ultimate_staples"][:5]
+    if not top_5_staples:
+        console.print("[yellow]Impossible de déterminer des contres communs.[/yellow]")
+        return
+        
+    console.print("\n[bold blue]Lancement du Reverse-Scouting sur le Top 5 des Staples...[/bold blue]")
+    with console.status("[cyan]Recherche d'archétypes compatibles via Yugipedia...[/cyan]"):
+        try:
+            archetypes = asyncio.run(find_matching_archetypes(top_5_staples))
+        except Exception as e:
+            console.print(f"[bold red]Erreur lors du Reverse-Scouting :[/bold red] {e}")
+            raise typer.Exit(1)
+            
+    table_a = Table(title="Archétypes Recommandés (Reverse-Scouting)", box=box.ROUNDED, title_style="bold green")
+    table_a.add_column("Archétype / Synergie", style="green")
+    table_a.add_column("Score d'Affinité", justify="right", style="yellow")
+    
+    for arch, score in archetypes:
+        table_a.add_row(arch, str(score))
+        
+    console.print(table_a)
+    console.print("\n[italic dim]Utilisez ensuite 'ygo-deck audit' pour harmoniser ces staples avec l'archétype choisi ![/italic dim]")
 
 if __name__ == "__main__":
     app()

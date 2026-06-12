@@ -3,7 +3,12 @@
 import httpx
 import re
 import asyncio
+import json
+import logging
+from pathlib import Path
 from typing import List, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 YUGIPEDIA_API_URL = "https://yugipedia.com/api.php"
 
@@ -21,8 +26,25 @@ SYNERGY_KEYWORDS = [
 
 async def fetch_card_tips(card_name: str) -> Optional[str]:
     """
-    Interroge l'API Yugipedia pour obtenir le contenu brut de la page Card_Tips de la carte.
+    Interroge l'API Yugipedia pour obtenir le contenu brut de la page Card_Tips de la carte,
+    avec un système de cache local pour éviter le ban de l'IP.
     """
+    # Chemin du cache
+    cache_dir = Path(__file__).resolve().parent.parent.parent.parent / "data" / "cache" / "yugipedia"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Nom de fichier sain
+    safe_name = re.sub(r'[\\/*?:"<>|]', "", card_name)
+    cache_file = cache_dir / f"{safe_name}.json"
+    
+    if cache_file.exists():
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("tips_text")
+        except json.JSONDecodeError:
+            pass # Fichier corrompu, on re-télécharge
+            
     # Remplacer les espaces par des underscores pour le titre MediaWiki
     title = f"Card_Tips:{card_name.replace(' ', '_')}"
     
@@ -47,16 +69,21 @@ async def fetch_card_tips(card_name: str) -> Optional[str]:
             pages = data.get("query", {}).get("pages", {})
             for page_id, page_info in pages.items():
                 if int(page_id) < 0:
-                    # Page non trouvée
+                    # Mettre en cache l'absence de page pour ne pas re-requêter
+                    with open(cache_file, "w", encoding="utf-8") as f:
+                        json.dump({"tips_text": None}, f)
                     return None
                     
                 revisions = page_info.get("revisions", [])
                 if revisions:
-                    return revisions[0].get("*", "")
+                    tips_text = revisions[0].get("*", "")
+                    with open(cache_file, "w", encoding="utf-8") as f:
+                        json.dump({"tips_text": tips_text}, f)
+                    return tips_text
                     
             return None
         except Exception as e:
-            print(f"Erreur lors de la requête Yugipedia pour {card_name}: {e}")
+            logger.error(f"Erreur lors de la requête Yugipedia pour {card_name}: {e}")
             return None
 
 def extract_cards_from_wikitext(text: str) -> List[str]:
