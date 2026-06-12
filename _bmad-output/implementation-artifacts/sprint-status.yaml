@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-11T07:33:10+02:00
-last_updated: 2026-06-12T10:14:00+02:00
+last_updated: 2026-06-12T10:26:00+02:00
 project: YGO ULTIME DECK
 project_key: NOKEY
 tracking_system: file-system
@@ -56,7 +56,7 @@ development_status:
   epic-3: in-progress
   3-1-algorithme-hypergeometrique-logarithmique: done
   3-2-parseur-des-mains-de-reve-target-combos-yaml: done
-  3-3-moteur-de-simulation-monte-carlo-multiprocessing: backlog
+  3-3-moteur-de-simulation-monte-carlo-multiprocessing: done
   3-4-resolution-des-resource-generators-pioche-dynamique: backlog
   epic-3-retrospective: optional
   epic-4: backlog

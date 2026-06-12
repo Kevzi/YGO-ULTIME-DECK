@@ -1,0 +1,1518 @@
+﻿diff --git a/_bmad-output/implementation-artifacts/2-1-moteur-d-expressions-regulieres-regex-psct.md b/_bmad-output/implementation-artifacts/2-1-moteur-d-expressions-regulieres-regex-psct.md
+new file mode 100644
+index 0000000..4077b13
+--- /dev/null
++++ b/_bmad-output/implementation-artifacts/2-1-moteur-d-expressions-regulieres-regex-psct.md
+@@ -0,0 +1,104 @@
++---
++baseline_commit: 46f42b22ccca45bae82f54cbe7f2e967ffd20464
++# Story 2.1: Moteur d'Expressions R├®guli├¿res (Regex PSCT)
++
++**Status:** done
++**Epic:** 2 - Personnalisation et Auto-Tagging S├®mantique
++
++## Story Requirements
++
++**User Story:**
++As a moteur de cat├®gorisation,
++I want utiliser des expressions r├®guli├¿res (Regex) pr├®-compil├®es pour scanner les textes d'effets des cartes,
++So that l'identification des m├®caniques de jeu (ex: "Add 1 card", "Special Summon") soit quasi-instantan├®e et ne d├®pende pas d'une intelligence artificielle (NLP) lourde.
++
++**Acceptance Criteria:**
++- **Given** un objet `CardModel` contenant un texte d'effet de type PSCT
++- **When** la fonction de tagging s├®mantique scanne la description
++- **Then** l'algorithme fait correspondre le texte avec les Regex sans crash (m├¬me sur des textes tr├¿s longs ou complexes)
++- **And** attribue le tag ad├®quat dans un temps de calcul minimal.
++
++## Developer Context & Guardrails
++
++### Technical Requirements
++- Cr├®er ou mettre ├á jour le module de r├¿gles, sp├®cifiquement `src/ygo_ultime_deck/rules/tagger.py`.
++- Le moteur doit exposer une fonction recevant un objet `CardModel` et une s├®rie de r├¿gles Regex.
++- Il doit appliquer les expressions r├®guli├¿res (id├®alement pr├®-compil├®es via `re.compile()`) sur le texte de l'effet de la carte (`desc`).
++- Le syst├¿me de tagging doit enrichir l'objet avec ses tags. Pour respecter l'immuabilit├® et la puret├®, le module devrait retourner un nouveau mod├¿le Pydantic, par exemple `TaggedCardModel`, h├®ritant de `CardModel` avec un attribut `tags: list[str]`.
++
++### Architecture Compliance
++- **Data Boundaries:** Ce module est la deuxi├¿me ├®tape du pipeline unidirectionnel : `Ingestion -> Rules`. Il ne fait pas d'appels externes, il re├ºoit des `CardModel` purs.
++- **Data Purity:** Pydantic doit toujours ├¬tre utilis├®. Les mod├¿les instanci├®s par ce module devront ├¬tre picklables pour l'├®tape suivante (Engine).
++- **Performance:** Les Regex doivent ├¬tre pr├®-compil├®es au chargement des r├¿gles pour ├®viter des p├®nalit├®s lors de la boucle sur les milliers de cartes.
++
++### Library/Framework Requirements
++- `re` (Standard Python library).
++- `pydantic` (d├®j├á install├®, pour le `TaggedCardModel`).
++
++### File Structure Requirements
++- `src/ygo_ultime_deck/models/card.py` (Mise ├á jour potentielle pour int├®grer `TaggedCardModel` ou `tags` optionnel).
++- `src/ygo_ultime_deck/rules/tagger.py` (Nouveau module pour la logique Regex).
++- `tests/test_rules/test_tagger.py` (Tests unitaires associ├®s).
++
++### Testing Requirements
++- Cr├®er une suite de tests unitaires simulant diff├®rentes descriptions complexes PSCT (Problem-Solving Card Text).
++- V├®rifier que le moteur ne plante pas sur des textes inattendus ou tr├¿s longs.
++- Mesurer que l'affectation du tag se fait correctement selon une regex d├®finie (ex: `r"Add .* from your Deck to your hand"` pour le tag "Searcher").
++
++## Previous Story Intelligence
++- Le `CardModel` actuel est configur├® avec `extra="ignore"`. Les attributs non explicitement d├®finis sont ignor├®s. Il est pr├®f├®rable de cr├®er un sous-mod├¿le Pydantic ou de modifier `CardModel` pour y ajouter `tags: list[str] = Field(default_factory=list)`.
++- Lors de l'Epic 1 (Ingestion), le parser a ├®t├® rendu ultra-r├®silient avec des try/except et des v├®rifications de types pour ignorer les cartes inattendues. Ce tagger devrait ├®galement g├®rer l'absence d'effets (ex: monstres normaux) sans lever d'exceptions.
++
++## Git Intelligence
++- Le projet respecte rigoureusement `Ruff` pour le formatage et le linting.
++- Garder les docstrings selon les conventions ├®tablies et ex├®cuter `uv run ruff check --fix` avant commit.
++
++## Tasks / Subtasks
++- [x] Mettre ├á jour `CardModel` ou cr├®er `TaggedCardModel` avec un champ `tags`.
++- [x] Cr├®er `src/ygo_ultime_deck/rules/tagger.py` pour le moteur de scan Regex.
++- [x] Pr├®-compiler un jeu de Regex d'exemple et l'appliquer sur la propri├®t├® `desc`.
++- [x] Cr├®er `tests/test_rules/test_tagger.py` pour valider la vitesse et la pr├®cision du Moteur Regex.
++- [x] Valider avec `pytest` et corriger les erreurs de linting avec `ruff`.
++
++### Review Findings
++- [x] [Review][Defer] ReDoS / Backtracking Mitigation ÔÇö deferred: Architecture Offline-First, r├¿gles internes s├®curis├®es.
++- [x] [Review][Patch] Regex Flags Inflexibles ÔÇö `re.IGNORECASE` est cod├® en dur, emp├¬chant les r├¿gles sensibles ├á la casse. Retir├®.
++- [x] [Review][Patch] Faux Positifs sur Monstres Normaux ÔÇö Ignorer structurellement les monstres normaux.
++- [x] [Review][Patch] Missing compilation safety [src/ygo_ultime_deck/rules/tagger.py:20]
++- [x] [Review][Patch] Fragile Stats Validator [src/ygo_ultime_deck/models/card.py:180]
++- [x] [Review][Patch] Tags key collision on instantiation [src/ygo_ultime_deck/rules/tagger.py:39]
++- [x] [Review][Patch] Missing re.DOTALL for multi-line texts [src/ygo_ultime_deck/rules/tagger.py:20]
++- [x] [Review][Patch] Pydantic performance bottleneck (use model_construct) [src/ygo_ultime_deck/rules/tagger.py:39]
++- [x] [Review][Patch] Antiquated Type Hinting [src/ygo_ultime_deck/rules/tagger.py:2]
++- [x] [Review][Patch] Redundant Defensive Checks on desc [src/ygo_ultime_deck/rules/tagger.py:33]
++- [x] [Review][Patch] Missing test coverage for complex PSCT [tests/test_rules/test_tagger.py]
++- [x] [Review][Patch] Missing programmatic speed validation [tests/test_rules/test_tagger.py]
++- [x] [Review][Patch] Superficial Edge-Case Testing (fields preservation) [tests/test_rules/test_tagger.py]
++- [x] [Review][Defer] Data Destruction (extra="ignore") [src/ygo_ultime_deck/models/card.py:155] ÔÇö deferred, pre-existing
++
++## Project Context Reference
++Ce module (Rules/Tagger) sera nourri par le YAML lors de la prochaine story, mais il doit d'abord disposer du c┼ôur de la m├®canique Regex (Story 2.1) avant de dynamiser ses inputs (Story 2.2).
++
++## Completion Status
++- **Status Update:** done
++- **Note:** Ultimate context engine analysis completed - comprehensive developer guide created
++
++## Dev Agent Record
++### Debug Log
++- N/A
++
++### Completion Notes
++- Impl├®mentation du mod├¿le `TaggedCardModel` h├®ritant de `CardModel`.
++- D├®veloppement de `RegexTagger` pour analyser les textes avec r├®silience et `re.IGNORECASE`.
++- Ajout de la suite de tests compl├¿tes simulant diff├®rents comportements (basic, no match, multiple matches, very long string).
++- Les v├®rifications Ruff et Pytest (y compris r├®trocompatibilit├®) passent ├á 100%.
++
++## File List
++- `src/ygo_ultime_deck/models/card.py`
++- `src/ygo_ultime_deck/rules/__init__.py`
++- `src/ygo_ultime_deck/rules/tagger.py`
++- `tests/test_rules/test_tagger.py`
++
++## Change Log
++- Ajout du tagger regex et du support Pydantic pour l'export des tags.
++---
+diff --git a/_bmad-output/implementation-artifacts/2-2-fichier-de-configuration-externe-tags-rules-yaml.md b/_bmad-output/implementation-artifacts/2-2-fichier-de-configuration-externe-tags-rules-yaml.md
+new file mode 100644
+index 0000000..ec5dcb5
+--- /dev/null
++++ b/_bmad-output/implementation-artifacts/2-2-fichier-de-configuration-externe-tags-rules-yaml.md
+@@ -0,0 +1,98 @@
++---
++baseline_commit: 46f42b22ccca45bae82f54cbe7f2e967ffd20464
++# Story 2.2: Fichier de Configuration Externe (tags_rules.yaml)
++
++**Status:** ready-for-dev
++**Epic:** 2 - Personnalisation et Auto-Tagging S├®mantique
++
++## Story Requirements
++
++**User Story:**
++As a concepteur de deck (utilisateur avanc├®),
++I want d├®finir le dictionnaire liant les mots-cl├®s aux "Tags" dans un fichier `config/tags_rules.yaml`,
++So that je puisse modifier l'intelligence du syst├¿me ou ajouter de nouvelles r├¿gles sans jamais avoir ├á retoucher le code source Python.
++
++**Acceptance Criteria:**
++- **Given** un fichier `tags_rules.yaml` d├®fini par l'utilisateur
++- **When** le syst├¿me initialise l'Epic 2
++- **Then** l'application charge ce fichier de mani├¿re s├®curis├®e (gestion de `FileNotFoundError` avec Typer)
++- **And** injecte ces r├¿gles dynamiquement dans le Moteur Regex.
++
++## Developer Context & Guardrails
++
++### Technical Requirements
++- Cr├®er le dossier `config/` ├á la racine du projet s'il n'existe pas, et g├®n├®rer un fichier d'exemple `tags_rules.yaml` (ou le charger s'il existe).
++- D├®velopper une fonction de chargement (par exemple dans `src/ygo_ultime_deck/rules/config_loader.py` ou int├®gr├® dans `__init__.py` du module rules) qui lit le fichier YAML et retourne le dictionnaire `dict[str, str]` attendu par `RegexTagger`.
++- Si le fichier `config/tags_rules.yaml` n'existe pas, le syst├¿me doit lever une erreur proprement ou cr├®er un fichier par d├®faut, selon l'approche de r├®silience choisie, mais le `FileNotFoundError` doit ├¬tre g├®r├® avec `typer.Exit(1)` (s'il est intercept├® par le main) ou g├®r├® gracieusement.
++- Les r├¿gles YAML devront supporter la casse. L'utilisateur devra ├®crire `(?i)` dans ses r├¿gles s'il souhaite que la r├¿gle soit insensible ├á la casse (comportement d├®cid├® lors de la Story 2.1).
++
++### Architecture Compliance
++- **Data Boundaries:** Les fichiers YAML dans `config/` sont les fronti├¿res de configuration : le script Python ne contient AUCUNE r├¿gle m├®tier en dur.
++- **Error Handling Patterns:** L'absence ou la mauvaise configuration du fichier YAML doit d├®clencher un arr├¬t gracieux via `typer.Exit(code=1)` et l'utilisation de `Rich` pour afficher l'erreur, et non une stacktrace brute.
++
++### Library/Framework Requirements
++- `pyyaml` (d├®j├á pr├®sent dans les d├®pendances `pyproject.toml`).
++- `typer` et `rich` pour la gestion des erreurs.
++
++### File Structure Requirements
++- `config/tags_rules.yaml` (Fichier d'exemple / mod├¿le)
++- `src/ygo_ultime_deck/rules/config.py` (ou `loader.py`) pour la logique de lecture.
++- `tests/test_rules/test_config.py` pour valider le chargement (et la gestion d'erreur).
++
++### Testing Requirements
++- Cr├®er un fichier YAML temporaire (via les fixtures pytest, ex: `tmp_path`) pour valider la bonne conversion du YAML en `dict[str, str]`.
++- V├®rifier le comportement du chargeur lorsque le fichier n'existe pas (doit g├®rer `FileNotFoundError` ou lever une exception qui sera rattrap├®e par le CLI).
++- V├®rifier le comportement si le fichier YAML est mal format├® (YamlError).
++
++## Previous Story Intelligence
++- Dans la Story 2.1, nous avons supprim├® le flag `re.IGNORECASE` cod├® en dur pour le moteur Regex. Il faut documenter dans les commentaires du `tags_rules.yaml` g├®n├®r├® par d├®faut que les utilisateurs doivent utiliser `(?i)` s'ils souhaitent que leurs regex soient insensibles ├á la casse.
++- Le `RegexTagger` est pr├¬t ├á consommer directement le r├®sultat de ce chargement YAML.
++
++## Git Intelligence
++- Maintenir le respect des normes `Ruff` (aucun import inutile).
++- Les commits r├®cents (Story 2.1) ont solidifi├® le typage avec des annotations modernes (`dict`, `re.Pattern`). Suivre cette tendance.
++
++## Project Context Reference
++- Le projet vise des performances massives, mais le chargement de cette configuration se fait ├á l'initialisation, donc l'I/O disque est acceptable ├á ce stade.
++
++## Tasks / Subtasks
++- [x] Cr├®er le dossier `config/` et un fichier d'exemple `tags_rules.yaml`.
++- [x] Cr├®er `src/ygo_ultime_deck/rules/config.py` contenant une fonction pour charger ce fichier YAML.
++- [x] G├®rer l'erreur `FileNotFoundError` avec `typer.Exit(1)` si le fichier YAML n'est pas trouv├®.
++- [x] Cr├®er les tests unitaires dans `tests/test_rules/test_config.py` pour valider le chargement et la gestion d'erreurs.
++- [x] V├®rifier que le linter Ruff et les tests pytest passent.
++
++### Review Findings
++- [x] [Review][Patch] Missing dynamic injection into Regex Engine [src/ygo_ultime_deck/rules/config.py]
++- [x] [Review][Patch] Missing runtime creation of config/ directory and example file [src/ygo_ultime_deck/rules/config.py]
++- [x] [Review][Patch] Error Output Routing (use stderr) [src/ygo_ultime_deck/rules/config.py]
++- [x] [Review][Patch] Naive File Handling (PermissionError) [src/ygo_ultime_deck/rules/config.py]
++- [x] [Review][Patch] Destructive Type Coercion (validate strings instead of casting) [src/ygo_ultime_deck/rules/config.py]
++- [x] [Review][Patch] Mishandling Empty Configuration Files [src/ygo_ultime_deck/rules/config.py]
++- [x] [Review][Patch] Platform-Dependent Encoding in the Test Suite [tests/test_rules/test_config.py]
++- [x] [Review][Patch] Incomplete Test Coverage for edge cases [tests/test_rules/test_config.py]
++- [x] [Review][Defer] Inconsistent Localization ÔÇö deferred, pre-existing
++- [x] [Review][Defer] Global State Side-Effects (Console) ÔÇö deferred, pre-existing
++- [x] [Review][Defer] Missing Formal Schema Validation (Pydantic) ÔÇö deferred, pre-existing
++
++## Completion Status
++- **Status Update:** done
++- **Note:** Implementation complete.
++
++## Dev Agent Record
++### Debug Log
++- N/A
++
++### Completion Notes
++- Cr├®ation du script `config.py` pour le chargement du YAML via `pyyaml`.
++- Gestion des erreurs `FileNotFoundError` et `yaml.YAMLError` int├®gr├®e avec `Typer` et `Rich`.
++- Cr├®ation du fichier d'exemple `config/tags_rules.yaml` documentant l'utilisation du flag `(?i)`.
++- Les tests unitaires (dont les validations de `Exit(1)`) passent avec succ├¿s ├á 100%.
++
++## File List
++- `config/tags_rules.yaml` (new)
++- `src/ygo_ultime_deck/rules/config.py` (new)
++- `tests/test_rules/test_config.py` (new)
++
++## Change Log
++- Ajout du module de configuration externe pour injecter dynamiquement les r├¿gles de tags Regex.
+diff --git a/_bmad-output/implementation-artifacts/deferred-work.md b/_bmad-output/implementation-artifacts/deferred-work.md
+index d29fb25..1d6b40b 100644
+Binary files a/_bmad-output/implementation-artifacts/deferred-work.md and b/_bmad-output/implementation-artifacts/deferred-work.md differ
+diff --git a/_bmad-output/implementation-artifacts/sprint-status.yaml b/_bmad-output/implementation-artifacts/sprint-status.yaml
+index 597761f..27bd24a 100644
+--- a/_bmad-output/implementation-artifacts/sprint-status.yaml
++++ b/_bmad-output/implementation-artifacts/sprint-status.yaml
+@@ -35,7 +35,7 @@
+ # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+ 
+ generated: 2026-06-11T07:33:10+02:00
+-last_updated: 2026-06-11T07:35:05+02:00
++last_updated: 2026-06-11T21:33:00+02:00
+ project: YGO ULTIME DECK
+ project_key: NOKEY
+ tracking_system: file-system
+@@ -44,17 +44,17 @@ story_location: c:/Users/kevin/Downloads/Projet code/YGO ULTIME DECK/_bmad-outpu
+ development_status:
+   epic-1: in-progress
+   1-1-initialisation-du-projet-socle-cli-typer: done
+-  1-2-modeles-de-donnees-pydantic-schema-v0-6-0: backlog
+-  1-3-telechargeur-ygojson-gestion-du-cache: backlog
+-  1-4-parseur-resilient-pre-filtrage-memoire: backlog
++  1-2-modeles-de-donnees-pydantic-schema-v0-6-0: done
++  1-3-telechargeur-ygojson-gestion-du-cache: done
++  1-4-parseur-resilient-pre-filtrage-memoire: done
+   epic-1-retrospective: optional
+-  epic-2: backlog
+-  2-1-moteur-d-expressions-regulieres-regex-psct: backlog
+-  2-2-fichier-de-configuration-externe-tags-rules-yaml: backlog
+-  2-3-implementation-du-multi-tagging-dynamique: backlog
++  epic-2: done
++  2-1-moteur-d-expressions-regulieres-regex-psct: done
++  2-2-fichier-de-configuration-externe-tags-rules-yaml: done
++  2-3-implementation-du-multi-tagging-dynamique: done
+   epic-2-retrospective: optional
+-  epic-3: backlog
+-  3-1-algorithme-hypergeometrique-logarithmique: backlog
++  epic-3: in-progress
++  3-1-algorithme-hypergeometrique-logarithmique: review
+   3-2-parseur-des-mains-de-reve-target-combos-yaml: backlog
+   3-3-moteur-de-simulation-monte-carlo-multiprocessing: backlog
+   3-4-resolution-des-resource-generators-pioche-dynamique: backlog
+diff --git a/config/tags_rules.yaml b/config/tags_rules.yaml
+new file mode 100644
+index 0000000..c1a9c08
+--- /dev/null
++++ b/config/tags_rules.yaml
+@@ -0,0 +1,12 @@
++# Fichier de configuration des r├¿gles de tags (tags_rules.yaml)
++# D├®finissez ici les Regex pour cat├®goriser vos cartes.
++# Les cl├®s sont les noms des tags, les valeurs sont les Regex correspondantes.
++#
++# NOTE : La sensibilit├® ├á la casse est respect├®e par d├®faut.
++# Si vous souhaitez qu'une r├¿gle ignore la casse, commencez-la par `(?i)`.
++# Exemple : `(?i)add .* from your deck to your hand`
++
++Starter: '(?i)Normal Summon.*add.*from your Deck to your hand'
++Extender: '(?i)Special Summon this card'
++HandTrap: '(?i)Discard this card.*negate that effect'
++BoardBreaker: '(?i)destroy all monsters your opponent controls'
+diff --git a/pyproject.toml b/pyproject.toml
+index 13fe6e0..28f5ee0 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -5,6 +5,8 @@ description = "Moteur d'optimisation de deck Yu-Gi-Oh!"
+ readme = "README.md"
+ requires-python = ">=3.12"
+ dependencies = [
++    "aiofiles>=25.1.0",
++    "httpx>=0.28.1",
+     "pydantic>=2.13.4",
+     "pyyaml>=6.0.3",
+     "rich>=13.0.0",
+@@ -21,5 +23,7 @@ build-backend = "uv_build"
+ [dependency-groups]
+ dev = [
+     "pytest>=9.0.3",
++    "pytest-asyncio>=1.4.0",
++    "pytest-httpx>=0.36.2",
+     "ruff>=0.15.16",
+ ]
+diff --git a/src/ygo_ultime_deck/ingestion/__init__.py b/src/ygo_ultime_deck/ingestion/__init__.py
+new file mode 100644
+index 0000000..8dbb758
+--- /dev/null
++++ b/src/ygo_ultime_deck/ingestion/__init__.py
+@@ -0,0 +1 @@
++"""Ingestion module."""
+diff --git a/src/ygo_ultime_deck/ingestion/downloader.py b/src/ygo_ultime_deck/ingestion/downloader.py
+new file mode 100644
+index 0000000..a9ff726
+--- /dev/null
++++ b/src/ygo_ultime_deck/ingestion/downloader.py
+@@ -0,0 +1,44 @@
++"""Ingestion downloader module."""
++
++import httpx
++import aiofiles
++from pathlib import Path
++from rich.progress import Progress
++
++DEFAULT_URL = "https://json.yugioh.com/api/v0.6.0/aggregate.zip"
++
++async def download_ygojson(target_path: Path, url: str = DEFAULT_URL) -> None:
++    """Download YGOJSON zip file asynchronously.
++    
++    Args:
++        target_path: Where to save the file.
++        url: The URL to download from.
++    """
++    target_path.parent.mkdir(parents=True, exist_ok=True)
++    
++    async with httpx.AsyncClient(timeout=30.0) as client:
++        try:
++            async with client.stream("GET", url) as response:
++                response.raise_for_status()
++                header_val = response.headers.get("Content-Length", "0")
++                total = int(header_val) if header_val.isdigit() else 0
++                
++                with Progress() as progress:
++                    task = progress.add_task("[cyan]Downloading YGOJSON...", total=total)
++                    async with aiofiles.open(target_path, "wb") as f:
++                        async for chunk in response.aiter_bytes():
++                            await f.write(chunk)
++                            progress.update(task, advance=len(chunk))
++        except BaseException:
++            if target_path.exists():
++                try:
++                    target_path.unlink()
++                except OSError:
++                    pass
++            # Try to clean up the parent directory if we created it and it's empty
++            if target_path.parent.exists():
++                try:
++                    target_path.parent.rmdir()
++                except OSError:
++                    pass
++            raise
+diff --git a/src/ygo_ultime_deck/ingestion/parser.py b/src/ygo_ultime_deck/ingestion/parser.py
+new file mode 100644
+index 0000000..7bd7e8d
+--- /dev/null
++++ b/src/ygo_ultime_deck/ingestion/parser.py
+@@ -0,0 +1,75 @@
++"""YGOJSON parser module."""
++
++import json
++import zipfile
++from pathlib import Path
++from typing import List
++
++from pydantic import ValidationError
++
++from ygo_ultime_deck.models.card import CardModel
++
++
++def load_and_parse_ygojson(zip_path: Path) -> List[CardModel]:
++    """
++    Load YGOJSON data from a zip file and parse it into a list of CardModels.
++    
++    Args:
++        zip_path: Path to the aggregate.zip file.
++        
++    Returns:
++        List of CardModels that are valid TCG/OCG cards.
++    """
++    valid_cards = []
++    
++    try:
++        with zipfile.ZipFile(zip_path, 'r') as zf:
++            json_filename = next((name for name in zf.namelist() if name.endswith('.json')), None)
++            
++            if not json_filename:
++                raise FileNotFoundError("No JSON file found in the provided zip archive.")
++                
++            with zf.open(json_filename) as f:
++                data = json.load(f)
++                
++                # Handling both array of cards and dict with data key
++                cards_list = data.get("data", []) if isinstance(data, dict) else data
++                
++                # If data was a dict but we couldn't find 'data' key or it's not a list
++                if not isinstance(cards_list, list):
++                    return []
++                
++                for card_data in cards_list:
++                    if not isinstance(card_data, dict):
++                        continue
++                        
++                    # Filtrage des formats (TCG ou OCG doivent ├¬tre pr├®sents)
++                    formats = card_data.get("formats", [])
++                    if not isinstance(formats, list):
++                        continue
++                        
++                    if "TCG" not in formats and "OCG" not in formats:
++                        continue
++                        
++                    # Filtrage de la Banlist (Ignorer les cartes ill├®gales)
++                    banlist_info = card_data.get("banlist_info", {})
++                    if isinstance(banlist_info, dict) and ("Banned" in banlist_info.values()):
++                        continue
++                        
++                    # Exclusion des Tokens
++                    card_type = card_data.get("type", "")
++                    if card_type == "Token":
++                        continue
++                        
++                    try:
++                        card_model = CardModel(**card_data)
++                        valid_cards.append(card_model)
++                    except (ValidationError, KeyError):
++                        # Swallow instantiation errors to ensure resilience
++                        pass
++                        
++    except (zipfile.BadZipFile, json.JSONDecodeError):
++        # Graceful degradation if the cache file is completely corrupted
++        pass
++        
++    return valid_cards
+diff --git a/src/ygo_ultime_deck/main.py b/src/ygo_ultime_deck/main.py
+index 7f6b1c2..73cc7ab 100644
+--- a/src/ygo_ultime_deck/main.py
++++ b/src/ygo_ultime_deck/main.py
+@@ -1,4 +1,9 @@
++"""Main CLI entry point for YGO ULTIME DECK."""
++
+ import sys
++import asyncio
++from pathlib import Path
++
+ import typer
+ from rich.console import Console
+ 
+@@ -6,6 +11,7 @@ app = typer.Typer(help="Moteur d'optimisation de deck Yu-Gi-Oh! (YGO ULTIME DECK
+ console = Console()
+ 
+ def global_exception_handler(exc_type, exc_value, exc_traceback):
++    """Handle unhandled exceptions globally, formatting with Rich."""
+     if issubclass(exc_type, typer.Exit):
+         sys.__excepthook__(exc_type, exc_value, exc_traceback)
+         return
+@@ -14,12 +20,32 @@ def global_exception_handler(exc_type, exc_value, exc_traceback):
+ 
+ sys.excepthook = global_exception_handler
+ 
+-@app.callback()
+-def main():
++
++@app.callback(invoke_without_command=True)
++def main(
++    ctx: typer.Context,
++    update: bool = typer.Option(False, "--update", help="T├®l├®charger et mettre ├á jour le cache YGOJSON"),
++):
+     """
+     [bold green]YGO ULTIME DECK[/bold green] - Moteur math├®matique et analytique pour Yu-Gi-Oh!
+     """
+-    pass
++    if update:
++        import httpx
++        from ygo_ultime_deck.ingestion.downloader import download_ygojson
++
++        target_path = Path(__file__).resolve().parent.parent.parent / "data" / "cache" / "aggregate.zip"
++        try:
++            asyncio.run(download_ygojson(target_path=target_path))
++            console.print("[bold green]T├®l├®chargement termin├® avec succ├¿s ![/bold green]")
++        except httpx.HTTPError as e:
++            console.print(f"[bold red]Erreur r├®seau lors du t├®l├®chargement :[/bold red] {e}")
++            raise typer.Exit(1)
++        except Exception as e:
++            console.print(f"[bold red]Erreur inattendue :[/bold red] {e}")
++            raise typer.Exit(1)
++            
++    elif ctx.invoked_subcommand is None:
++        console.print(ctx.get_help())
+ 
+ if __name__ == "__main__":
+     app()
+diff --git a/src/ygo_ultime_deck/models/__init__.py b/src/ygo_ultime_deck/models/__init__.py
+new file mode 100644
+index 0000000..bb8b9c5
+--- /dev/null
++++ b/src/ygo_ultime_deck/models/__init__.py
+@@ -0,0 +1,5 @@
++"""Models for YGO Ultime Deck."""
++
++from .card import CardModel, CardAttribute, CardRace
++
++__all__ = ["CardModel", "CardAttribute", "CardRace"]
+diff --git a/src/ygo_ultime_deck/models/card.py b/src/ygo_ultime_deck/models/card.py
+new file mode 100644
+index 0000000..48f6ccb
+--- /dev/null
++++ b/src/ygo_ultime_deck/models/card.py
+@@ -0,0 +1,86 @@
++from pydantic import BaseModel, Field, ConfigDict, field_validator
++from typing import Optional
++from enum import Enum
++
++class CardAttribute(str, Enum):
++    DARK = "DARK"
++    EARTH = "EARTH"
++    FIRE = "FIRE"
++    LIGHT = "LIGHT"
++    WATER = "WATER"
++    WIND = "WIND"
++    DIVINE = "DIVINE"
++
++class CardRace(str, Enum):
++    AQUA = "Aqua"
++    BEAST = "Beast"
++    BEAST_WARRIOR = "Beast-Warrior"
++    CREATOR_GOD = "Creator-God"
++    CYBERSE = "Cyberse"
++    DINOSAUR = "Dinosaur"
++    DIVINE_BEAST = "Divine-Beast"
++    DRAGON = "Dragon"
++    FAIRY = "Fairy"
++    FIEND = "Fiend"
++    FISH = "Fish"
++    INSECT = "Insect"
++    ILLUSION = "Illusion"
++    MACHINE = "Machine"
++    PLANT = "Plant"
++    PSYCHIC = "Psychic"
++    PYRO = "Pyro"
++    REPTILE = "Reptile"
++    ROCK = "Rock"
++    SEA_SERPENT = "Sea Serpent"
++    SPELLCASTER = "Spellcaster"
++    THUNDER = "Thunder"
++    WARRIOR = "Warrior"
++    WINGED_BEAST = "Winged Beast"
++    WYRM = "Wyrm"
++    ZOMBIE = "Zombie"
++    # Spell/Trap races
++    NORMAL = "Normal"
++    FIELD = "Field"
++    EQUIP = "Equip"
++    CONTINUOUS = "Continuous"
++    QUICK_PLAY = "Quick-Play"
++    RITUAL = "Ritual"
++    COUNTER = "Counter"
++
++class CardModel(BaseModel):
++    """Pydantic model representing a YGOJSON card."""
++    
++    model_config = ConfigDict(
++        populate_by_name=True,
++        extra="ignore"
++    )
++    
++    id: str
++    name: str
++    card_type: str = Field(alias="type")
++    desc: str
++    
++    # Optional attributes
++    race: Optional[CardRace] = None
++    atk: Optional[int] = Field(default=None, ge=-1)
++    def_: Optional[int] = Field(default=None, alias="def", ge=-1)
++    level: Optional[int] = Field(default=None, ge=0, le=13)
++    attribute: Optional[CardAttribute] = None
++    series: Optional[str] = None
++    
++    # Additional common optional attributes based on YGOJSON schema
++    archetype: Optional[str] = None
++    scale: Optional[int] = Field(default=None, ge=0, le=13)
++    linkval: Optional[int] = Field(default=None, ge=1, le=8)
++    linkmarkers: Optional[list[str]] = None
++
++    @field_validator("atk", "def_", mode="before")
++    @classmethod
++    def handle_question_mark_stats(cls, v):
++        if isinstance(v, str) and v.strip() == "?":
++            return -1
++        return v
++
++class TaggedCardModel(CardModel):
++    """A CardModel that has been enriched with semantic tags."""
++    tags: list[str] = Field(default_factory=list)
+diff --git a/src/ygo_ultime_deck/rules/__init__.py b/src/ygo_ultime_deck/rules/__init__.py
+new file mode 100644
+index 0000000..18aeb1f
+--- /dev/null
++++ b/src/ygo_ultime_deck/rules/__init__.py
+@@ -0,0 +1,3 @@
++from ygo_ultime_deck.rules.tagger import RegexTagger
++
++__all__ = ["RegexTagger"]
+diff --git a/src/ygo_ultime_deck/rules/config.py b/src/ygo_ultime_deck/rules/config.py
+new file mode 100644
+index 0000000..30a1696
+--- /dev/null
++++ b/src/ygo_ultime_deck/rules/config.py
+@@ -0,0 +1,75 @@
++import yaml
++import typer
++from pathlib import Path
++from rich.console import Console
++
++console = Console(stderr=True)
++
++DEFAULT_CONFIG_CONTENT = """# Fichier de configuration des r├¿gles de tags (tags_rules.yaml)
++# D├®finissez ici les Regex pour cat├®goriser vos cartes.
++# Les cl├®s sont les noms des tags, les valeurs sont les Regex correspondantes.
++#
++# NOTE : La sensibilit├® ├á la casse est respect├®e par d├®faut.
++# Si vous souhaitez qu'une r├¿gle ignore la casse, commencez-la par `(?i)`.
++# Exemple : `(?i)add .* from your deck to your hand`
++
++Starter: '(?i)Normal Summon.*add.*from your Deck to your hand'
++Extender: '(?i)Special Summon this card'
++HandTrap: '(?i)Discard this card.*negate that effect'
++BoardBreaker: '(?i)destroy all monsters your opponent controls'
++"""
++
++def load_tags_rules(filepath: Path | str) -> dict[str, str]:
++    """
++    Load tags rules from a YAML file.
++    Creates a default configuration file if it doesn't exist.
++    
++    Args:
++        filepath: Path to the YAML file.
++        
++    Returns:
++        A dictionary mapping tags to regex patterns.
++        
++    Raises:
++        typer.Exit(1): If the file is invalid YAML or cannot be read.
++    """
++    path = Path(filepath)
++    
++    if not path.exists():
++        try:
++            path.parent.mkdir(parents=True, exist_ok=True)
++            path.write_text(DEFAULT_CONFIG_CONTENT, encoding="utf-8")
++        except PermissionError:
++            console.print(f"[bold red]Erreur critique : Permission refus├®e pour cr├®er le fichier {path}.[/bold red]")
++            raise typer.Exit(code=1)
++        except OSError as e:
++            console.print(f"[bold red]Erreur critique lors de la cr├®ation du fichier {path} :[/bold red]\n{e}")
++            raise typer.Exit(code=1)
++        
++    try:
++        with open(path, "r", encoding="utf-8") as f:
++            rules = yaml.safe_load(f)
++            
++        if rules is None:
++            console.print(f"[bold red]Erreur critique : Le fichier {path} est vide.[/bold red]")
++            raise typer.Exit(code=1)
++            
++        if not isinstance(rules, dict):
++            console.print(f"[bold red]Erreur critique : Le fichier {path} doit contenir un dictionnaire (cl├®-valeur).[/bold red]")
++            raise typer.Exit(code=1)
++            
++        # Ensure all keys and values are strings
++        for k, v in rules.items():
++            if not isinstance(k, str) or not isinstance(v, str):
++                console.print(f"[bold red]Erreur critique : Dans le fichier {path}, toutes les cl├®s et valeurs doivent ├¬tre des cha├«nes de caract├¿res.[/bold red]")
++                raise typer.Exit(code=1)
++                
++        return rules
++        
++    except PermissionError:
++        console.print(f"[bold red]Erreur critique : Permission refus├®e pour lire le fichier {path}.[/bold red]")
++        raise typer.Exit(code=1)
++    except yaml.YAMLError as e:
++        console.print(f"[bold red]Erreur critique lors de l'analyse du fichier YAML {path} :[/bold red]\n{e}")
++        raise typer.Exit(code=1)
++
+diff --git a/src/ygo_ultime_deck/rules/tagger.py b/src/ygo_ultime_deck/rules/tagger.py
+new file mode 100644
+index 0000000..cfdb763
+--- /dev/null
++++ b/src/ygo_ultime_deck/rules/tagger.py
+@@ -0,0 +1,76 @@
++import re
++import logging
++from pathlib import Path
++from ygo_ultime_deck.models.card import CardModel, TaggedCardModel
++
++logger = logging.getLogger(__name__)
++
++class RegexTagger:
++    """Categorizes cards using pre-compiled regular expressions."""
++    
++    def __init__(self, rules: dict[str, str]):
++        """
++        Initialize the tagger with a dictionary of rules.
++        
++        Args:
++            rules: A dictionary where keys are tag names and values are regex patterns.
++        """
++        self.compiled_rules: dict[str, re.Pattern] = {}
++        for tag, pattern in rules.items():
++            try:
++                # Removed re.IGNORECASE to allow case-sensitive rules.
++                # Added re.DOTALL to allow .* to match across newlines in PSCT.
++                self.compiled_rules[tag] = re.compile(pattern, re.DOTALL)
++            except (re.error, TypeError) as e:
++                logger.error("Failed to compile regex for tag '%s': %s", tag, e)
++
++    @classmethod
++    def from_config(cls, filepath: str | Path | None = None) -> "RegexTagger":
++        """
++        Create a RegexTagger from a YAML configuration file.
++        
++        Args:
++            filepath: Optional path to the YAML file. Defaults to config/tags_rules.yaml.
++            
++        Returns:
++            An instance of RegexTagger configured with the loaded rules.
++        """
++        from ygo_ultime_deck.rules.config import load_tags_rules
++        
++        if filepath is None:
++            current_dir = Path(__file__).resolve().parent
++            while current_dir.parent != current_dir and not (current_dir / "config" / "tags_rules.yaml").exists():
++                current_dir = current_dir.parent
++            filepath = current_dir / "config" / "tags_rules.yaml"
++            
++        rules = load_tags_rules(filepath)
++        return cls(rules)
++
++            
++    def tag_card(self, card: CardModel) -> TaggedCardModel:
++        """
++        Evaluate a card's description against the compiled regex rules and return a new TaggedCardModel.
++        
++        Args:
++            card: The original CardModel.
++            
++        Returns:
++            A new TaggedCardModel with the matched tags appended.
++        """
++        matched_tags = []
++        
++        # Structurally ignore non-effect normal monsters to avoid false positives on flavor text
++        is_normal_monster = "Normal" in card.card_type and "Monster" in card.card_type and "Pendulum" not in card.card_type
++        
++        if not is_normal_monster:
++            desc = card.desc
++            if desc:
++                for tag, compiled_pattern in self.compiled_rules.items():
++                    if compiled_pattern.search(desc):
++                        matched_tags.append(tag)
++                
++        card_data = card.model_dump(by_alias=True)
++        card_data.pop("tags", None) # Prevent key collision
++        
++        # Use model_construct to bypass Pydantic validation for massive performance gain
++        return TaggedCardModel.model_construct(**card_data, tags=matched_tags)
+diff --git a/tests/test_ingestion/__init__.py b/tests/test_ingestion/__init__.py
+new file mode 100644
+index 0000000..077b70e
+--- /dev/null
++++ b/tests/test_ingestion/__init__.py
+@@ -0,0 +1 @@
++"""Ingestion tests."""
+diff --git a/tests/test_ingestion/test_downloader.py b/tests/test_ingestion/test_downloader.py
+new file mode 100644
+index 0000000..d8ca450
+--- /dev/null
++++ b/tests/test_ingestion/test_downloader.py
+@@ -0,0 +1,54 @@
++"""Tests for the YGOJSON downloader module."""
++
++import pytest
++import httpx
++from typer.testing import CliRunner
++
++from ygo_ultime_deck.ingestion.downloader import download_ygojson, DEFAULT_URL
++from ygo_ultime_deck.main import app
++
++runner = CliRunner()
++
++@pytest.mark.asyncio
++async def test_download_success(httpx_mock, tmp_path):
++    """Test successful download writes content to target path."""
++    mock_file_content = b"fake zip content"
++    httpx_mock.add_response(url=DEFAULT_URL, content=mock_file_content, headers={"Content-Length": str(len(mock_file_content))})
++    
++    target_path = tmp_path / "cache" / "aggregate.zip"
++    await download_ygojson(target_path=target_path)
++    
++    assert target_path.exists()
++    assert target_path.read_bytes() == mock_file_content
++
++@pytest.mark.asyncio
++async def test_download_failure_request_error(httpx_mock, tmp_path):
++    """Test that network errors during download raise RequestError."""
++    httpx_mock.add_exception(httpx.RequestError("Mock network error"))
++    
++    target_path = tmp_path / "cache" / "aggregate.zip"
++    
++    with pytest.raises(httpx.RequestError):
++        await download_ygojson(target_path=target_path)
++        
++    assert not target_path.exists()
++    assert not target_path.parent.exists()
++
++@pytest.mark.asyncio
++async def test_download_failure_http_error(httpx_mock, tmp_path):
++    """Test that HTTP 404 responses raise HTTPStatusError."""
++    httpx_mock.add_response(url=DEFAULT_URL, status_code=404)
++    
++    target_path = tmp_path / "cache" / "aggregate.zip"
++    
++    with pytest.raises(httpx.HTTPStatusError):
++        await download_ygojson(target_path=target_path)
++
++def test_cli_graceful_exit_on_network_error(httpx_mock):
++    """Test that the CLI handles network errors gracefully with typer.Exit(1)."""
++    httpx_mock.add_exception(httpx.RequestError("Mock network error"))
++    
++    result = runner.invoke(app, ["--update"])
++    
++    assert result.exit_code == 1
++    assert "Erreur r├®seau lors du t├®l├®chargement" in result.output
+diff --git a/tests/test_ingestion/test_parser.py b/tests/test_ingestion/test_parser.py
+new file mode 100644
+index 0000000..715287c
+--- /dev/null
++++ b/tests/test_ingestion/test_parser.py
+@@ -0,0 +1,134 @@
++"""Tests for the YGOJSON parser module."""
++
++import pytest
++import zipfile
++import json
++
++from ygo_ultime_deck.ingestion.parser import load_and_parse_ygojson
++from ygo_ultime_deck.models.card import CardModel
++
++@pytest.fixture
++def mock_ygojson_zip(tmp_path):
++    """Create a mock YGOJSON zip file in memory for testing."""
++    mock_data = [
++        # Valid TCG Card
++        {
++            "id": "12345678",
++            "name": "Dark Magician",
++            "type": "Normal Monster",
++            "desc": "The ultimate wizard in terms of attack and defense.",
++            "atk": 2500,
++            "def": 2100,
++            "level": 7,
++            "race": "Spellcaster",
++            "attribute": "DARK",
++            "formats": ["TCG", "OCG"]
++        },
++        # Valid TCG Card with "?" stats
++        {
++            "id": "10000020",
++            "name": "Slifer the Sky Dragon",
++            "type": "Effect Monster",
++            "desc": "Requires 3 Tributes to Normal Summon...",
++            "atk": "?",
++            "def": "?",
++            "level": 10,
++            "race": "Divine-Beast",
++            "attribute": "DIVINE",
++            "formats": ["TCG", "OCG"]
++        },
++        # Rush Duel Card (should be filtered out)
++        {
++            "id": "99999999",
++            "name": "Rush Dragon",
++            "type": "Effect Monster",
++            "desc": "Rush Duel exclusive.",
++            "formats": ["Rush Duel"]
++        },
++        # Token (should be filtered out)
++        {
++            "id": "88888888",
++            "name": "Sheep Token",
++            "type": "Token",
++            "desc": "Special Summoned by Scapegoat.",
++            "formats": ["TCG", "OCG"]
++        },
++        # Speed Duel only (should be filtered out)
++        {
++            "id": "77777777",
++            "name": "Speed Spell",
++            "type": "Spell Card",
++            "desc": "Speed duel card.",
++            "formats": ["Speed Duel"]
++        },
++        # Malformed Card (missing required fields, should not crash parser)
++        {
++            "name": "Missing ID Card",
++            "type": "Effect Monster",
++            "formats": ["TCG"]
++        },
++        # Banned Card (should be filtered out)
++        {
++            "id": "11111111",
++            "name": "Pot of Greed",
++            "type": "Spell Card",
++            "desc": "Draw 2 cards.",
++            "formats": ["TCG", "OCG"],
++            "banlist_info": {
++                "ban_tcg": "Banned",
++                "ban_ocg": "Banned"
++            }
++        },
++        # Malformed non-dictionary item
++        "Just a string instead of a dictionary",
++        12345
++    ]
++
++    zip_path = tmp_path / "aggregate.zip"
++    with zipfile.ZipFile(zip_path, "w") as zf:
++        zf.writestr("cards.json", json.dumps(mock_data))
++        
++    return zip_path
++
++def test_load_and_parse_ygojson(mock_ygojson_zip):
++    """Test that the parser correctly filters formats and handles errors."""
++    cards = load_and_parse_ygojson(mock_ygojson_zip)
++    
++    assert len(cards) == 2
++    assert all(isinstance(c, CardModel) for c in cards)
++    
++    names = [c.name for c in cards]
++    assert "Dark Magician" in names
++    assert "Slifer the Sky Dragon" in names
++    
++    # Check that "?" was properly converted to -1
++    slifer = next(c for c in cards if c.name == "Slifer the Sky Dragon")
++    assert slifer.atk == -1
++    assert slifer.def_ == -1
++
++def test_load_and_parse_ygojson_bad_zip(tmp_path):
++    """Test that the parser handles BadZipFile gracefully."""
++    bad_zip = tmp_path / "bad.zip"
++    bad_zip.write_text("Not a zip file")
++    
++    cards = load_and_parse_ygojson(bad_zip)
++    assert cards == []
++
++def test_load_and_parse_ygojson_bad_json(tmp_path):
++    """Test that the parser handles JSONDecodeError gracefully."""
++    zip_path = tmp_path / "bad_json.zip"
++    with zipfile.ZipFile(zip_path, "w") as zf:
++        zf.writestr("cards.json", "{ malformed json ]")
++        
++    cards = load_and_parse_ygojson(zip_path)
++    assert cards == []
++
++def test_load_and_parse_ygojson_dict_no_data(tmp_path):
++    """Test that the parser handles a dict without 'data' key without crashing."""
++    zip_path = tmp_path / "no_data.zip"
++    with zipfile.ZipFile(zip_path, "w") as zf:
++        # A dictionary that doesn't have "data"
++        zf.writestr("cards.json", json.dumps({"meta": {"date": "today"}}))
++        
++    cards = load_and_parse_ygojson(zip_path)
++    assert cards == []
+diff --git a/tests/test_models/__init__.py b/tests/test_models/__init__.py
+new file mode 100644
+index 0000000..66cb542
+--- /dev/null
++++ b/tests/test_models/__init__.py
+@@ -0,0 +1 @@
++"""Test models init."""
+diff --git a/tests/test_models/test_card.py b/tests/test_models/test_card.py
+new file mode 100644
+index 0000000..e471a26
+--- /dev/null
++++ b/tests/test_models/test_card.py
+@@ -0,0 +1,99 @@
++import pytest
++import pickle
++from pydantic import ValidationError
++from ygo_ultime_deck.models.card import CardModel, CardRace, CardAttribute
++
++@pytest.fixture
++def dark_magician_data():
++    return {
++        "id": "46986414",
++        "name": "Dark Magician",
++        "type": "Normal Monster",
++        "desc": "The ultimate wizard in terms of attack and defense.",
++        "race": "Spellcaster",
++        "atk": 2500,
++        "def": 2100,
++        "level": 7,
++        "attribute": "DARK"
++    }
++
++@pytest.fixture
++def pot_of_greed_data():
++    return {
++        "id": "55144522",
++        "name": "Pot of Greed",
++        "type": "Spell Card",
++        "desc": "Draw 2 cards.",
++        "race": "Normal"
++    }
++
++def test_card_instantiation_with_alias(dark_magician_data):
++    card = CardModel.model_validate(dark_magician_data)
++    assert card.id == "46986414"
++    assert card.name == "Dark Magician"
++    assert card.card_type == "Normal Monster"
++    assert card.desc == "The ultimate wizard in terms of attack and defense."
++    assert card.atk == 2500
++    assert card.def_ == 2100
++    assert card.race == CardRace.SPELLCASTER
++    assert card.attribute == CardAttribute.DARK
++    
++def test_card_optional_fields(pot_of_greed_data):
++    card = CardModel.model_validate(pot_of_greed_data)
++    assert card.name == "Pot of Greed"
++    assert card.atk is None
++    assert card.level is None
++    assert card.series is None
++
++def test_card_is_picklable(dark_magician_data):
++    card = CardModel.model_validate(dark_magician_data)
++    pickled_card = pickle.dumps(card)
++    unpickled_card = pickle.loads(pickled_card)
++    
++    assert unpickled_card.id == card.id
++    assert unpickled_card.name == card.name
++    assert unpickled_card.card_type == card.card_type
++    assert unpickled_card.atk == card.atk
++    assert unpickled_card.def_ == card.def_
++    assert unpickled_card.desc == card.desc
++    assert unpickled_card.race == card.race
++    assert unpickled_card.attribute == card.attribute
++
++def test_missing_mandatory_fields():
++    with pytest.raises(ValidationError) as exc_info:
++        CardModel.model_validate({"name": "No ID Card"})
++    assert "id" in str(exc_info.value)
++    assert "type" in str(exc_info.value)
++    assert "desc" in str(exc_info.value)
++
++def test_question_mark_stats():
++    slifer_data = {
++        "id": "10000020",
++        "name": "Slifer the Sky Dragon",
++        "type": "Effect Monster",
++        "desc": "Gains 1000 ATK/DEF for each card in your hand.",
++        "race": "Divine-Beast",
++        "atk": "?",
++        "def": "?",
++        "level": 10,
++        "attribute": "DIVINE"
++    }
++    card = CardModel.model_validate(slifer_data)
++    assert card.atk == -1
++    assert card.def_ == -1
++
++def test_linkmarkers():
++    decode_talker_data = {
++        "id": "01861629",
++        "name": "Decode Talker",
++        "type": "Link Monster",
++        "desc": "2+ Effect Monsters",
++        "race": "Cyberse",
++        "atk": 2300,
++        "linkval": 3,
++        "linkmarkers": ["Top", "Bottom-Left", "Bottom-Right"],
++        "attribute": "DARK"
++    }
++    card = CardModel.model_validate(decode_talker_data)
++    assert card.linkmarkers == ["Top", "Bottom-Left", "Bottom-Right"]
++    assert card.linkval == 3
+diff --git a/tests/test_rules/test_config.py b/tests/test_rules/test_config.py
+new file mode 100644
+index 0000000..319f403
+--- /dev/null
++++ b/tests/test_rules/test_config.py
+@@ -0,0 +1,81 @@
++import pytest
++import typer
++from pathlib import Path
++from ygo_ultime_deck.rules.config import load_tags_rules
++
++def test_load_valid_yaml(tmp_path: Path):
++    yaml_file = tmp_path / "tags_rules.yaml"
++    yaml_content = """
++    Searcher: '(?i)add .* from your deck to your hand'
++    Extender: 'Special Summon this card'
++    """
++    yaml_file.write_text(yaml_content, encoding="utf-8")
++    
++    rules = load_tags_rules(yaml_file)
++    assert isinstance(rules, dict)
++    assert "Searcher" in rules
++    assert "Extender" in rules
++    assert rules["Searcher"] == "(?i)add .* from your deck to your hand"
++
++def test_file_creation_when_not_found(tmp_path: Path):
++    non_existent_file = tmp_path / "config" / "does_not_exist.yaml"
++    
++    # Ensure it doesn't exist initially
++    assert not non_existent_file.exists()
++    
++    # Loading it should create it with defaults
++    rules = load_tags_rules(non_existent_file)
++    
++    assert non_existent_file.exists()
++    assert isinstance(rules, dict)
++    assert "Starter" in rules
++    assert "Extender" in rules
++
++def test_invalid_yaml(tmp_path: Path):
++    yaml_file = tmp_path / "tags_rules.yaml"
++    # Invalid YAML (missing colon, weird indentation)
++    yaml_content = """
++    Searcher '(?i)add .* from your deck to your hand'
++      Extender: 'Special Summon this card'
++    """
++    yaml_file.write_text(yaml_content, encoding="utf-8")
++    
++    with pytest.raises(typer.Exit) as exc_info:
++        load_tags_rules(yaml_file)
++        
++    assert exc_info.value.exit_code == 1
++
++def test_empty_yaml(tmp_path: Path):
++    yaml_file = tmp_path / "empty.yaml"
++    yaml_file.write_text("", encoding="utf-8")
++    
++    with pytest.raises(typer.Exit) as exc_info:
++        load_tags_rules(yaml_file)
++        
++    assert exc_info.value.exit_code == 1
++
++def test_invalid_yaml_schema(tmp_path: Path):
++    yaml_file = tmp_path / "invalid_schema.yaml"
++    yaml_content = """
++    - item1
++    - item2
++    """
++    yaml_file.write_text(yaml_content, encoding="utf-8")
++    
++    with pytest.raises(typer.Exit) as exc_info:
++        load_tags_rules(yaml_file)
++        
++    assert exc_info.value.exit_code == 1
++
++def test_invalid_types_in_dict(tmp_path: Path):
++    yaml_file = tmp_path / "invalid_types.yaml"
++    yaml_content = """
++    Searcher: ['a list instead of a regex string']
++    """
++    yaml_file.write_text(yaml_content, encoding="utf-8")
++    
++    with pytest.raises(typer.Exit) as exc_info:
++        load_tags_rules(yaml_file)
++        
++    assert exc_info.value.exit_code == 1
++
+diff --git a/tests/test_rules/test_tagger.py b/tests/test_rules/test_tagger.py
+new file mode 100644
+index 0000000..72a2e49
+--- /dev/null
++++ b/tests/test_rules/test_tagger.py
+@@ -0,0 +1,171 @@
++import time
++from ygo_ultime_deck.models.card import CardModel, TaggedCardModel
++from ygo_ultime_deck.rules.tagger import RegexTagger
++
++def test_tagged_card_model():
++    card = TaggedCardModel(
++        id="123",
++        name="Test Card",
++        type="Effect Monster",
++        desc="A test description.",
++        tags=["Searcher"]
++    )
++    assert "Searcher" in card.tags
++    assert card.name == "Test Card"
++
++def test_regex_tagger_basic_match():
++    card = CardModel(
++        id="456",
++        name="Reinforcement of the Army",
++        type="Spell Card",
++        desc="Add 1 Level 4 or lower Warrior monster from your Deck to your hand."
++    )
++    
++    rules = {
++        "Searcher": r"Add .* from your Deck to your hand"
++    }
++    
++    tagger = RegexTagger(rules)
++    tagged_card = tagger.tag_card(card)
++    
++    assert isinstance(tagged_card, TaggedCardModel)
++    assert "Searcher" in tagged_card.tags
++    assert tagged_card.id == card.id
++
++def test_regex_tagger_no_match():
++    card = CardModel(
++        id="789",
++        name="Dark Magician",
++        type="Normal Monster",
++        desc="The ultimate wizard in terms of attack and defense."
++    )
++    
++    rules = {
++        "Searcher": r"Add .* from your Deck to your hand"
++    }
++    
++    tagger = RegexTagger(rules)
++    tagged_card = tagger.tag_card(card)
++    
++    assert isinstance(tagged_card, TaggedCardModel)
++    assert len(tagged_card.tags) == 0
++
++def test_regex_tagger_multiple_matches():
++    card = CardModel(
++        id="101",
++        name="Combo Card",
++        type="Effect Monster",
++        desc="Special Summon this card. Add 1 card from your Deck to your hand."
++    )
++    
++    rules = {
++        "Searcher": r"Add .* from your Deck to your hand",
++        "Extender": r"Special Summon this card"
++    }
++    
++    tagger = RegexTagger(rules)
++    tagged_card = tagger.tag_card(card)
++    
++    assert "Searcher" in tagged_card.tags
++    assert "Extender" in tagged_card.tags
++    assert len(tagged_card.tags) == 2
++
++def test_regex_tagger_complex_text_no_crash():
++    card = CardModel(
++        id="102",
++        name="Very Long Text Card",
++        type="Effect Monster",
++        desc="A" * 10000  # Extremely long text to test regex performance/crash
++    )
++    
++    rules = {
++        "Searcher": r"Add .* from your Deck to your hand"
++    }
++    
++    tagger = RegexTagger(rules)
++    tagged_card = tagger.tag_card(card)
++    assert len(tagged_card.tags) == 0
++
++def test_regex_tagger_complex_psct():
++    # Test multi-line PSCT parsing with re.DOTALL
++    desc = (
++        "If this card is Normal or Special Summoned: You can add 1 'HERO' monster from your Deck to your hand.\n"
++        "If this card is sent to the GY: You can Special Summon 1 'Destiny HERO' monster from your GY.\n"
++        "You can only use each effect of 'Test HERO' once per turn."
++    )
++    card = CardModel(
++        id="103",
++        name="Test HERO",
++        type="Effect Monster",
++        desc=desc
++    )
++    
++    rules = {
++        "Searcher": r"add 1 .* from your Deck to your hand",
++        "GY_Revive": r"Special Summon .* from your GY"
++    }
++    
++    # We test case sensitivity. Without (?i), it shouldn't match "add" because of "add". Wait, rule says "add". Text says "add". It should match.
++    # Actually, text says "add 1 'HERO'". Rule says "add 1 .* from your Deck to your hand". With DOTALL, it should match.
++    tagger = RegexTagger(rules)
++    tagged_card = tagger.tag_card(card)
++    
++    assert "Searcher" in tagged_card.tags
++    assert "GY_Revive" in tagged_card.tags
++
++def test_regex_tagger_performance():
++    # Programmatic speed validation
++    card = CardModel(
++        id="104",
++        name="Speed Card",
++        type="Effect Monster",
++        desc="Draw 2 cards."
++    )
++    rules = {f"Rule_{i}": r"Draw \d+ cards\." for i in range(100)}
++    tagger = RegexTagger(rules)
++    
++    start_time = time.perf_counter()
++    for _ in range(100):
++        tagger.tag_card(card)
++    duration = time.perf_counter() - start_time
++    
++    # Assert that 100 cards against 100 rules takes less than 2.0s to avoid flakiness
++    assert duration < 2.0, f"Tagger is too slow: {duration}s"
++
++def test_regex_tagger_duplicate_prevention():
++    card = CardModel(
++        id="999",
++        name="Dup Card",
++        type="Effect Monster",
++        desc="Search. Search."
++    )
++    rules = {
++        "Searcher": r"Search"
++    }
++    tagger = RegexTagger(rules)
++    tagged_card = tagger.tag_card(card)
++    
++    # Assert tag is present only once
++    assert tagged_card.tags.count("Searcher") == 1
++
++def test_regex_tagger_fields_preservation():
++    # Assert that original fields are preserved
++    card = CardModel(
++        id="105",
++        name="Field Preserver",
++        type="Effect Monster",
++        desc="Preserve.",
++        atk=2000,
++        def_=1500,
++        level=4,
++        race="Warrior",
++        attribute="EARTH"
++    )
++    tagger = RegexTagger({})
++    tagged_card = tagger.tag_card(card)
++    
++    assert tagged_card.atk == 2000
++    assert getattr(tagged_card, 'def_') == 1500
++    assert tagged_card.level == 4
++    assert tagged_card.race == "Warrior"
++    assert tagged_card.attribute == "EARTH"
+diff --git a/uv.lock b/uv.lock
+index 8855b97..3021d9f 100644
+--- a/uv.lock
++++ b/uv.lock
+@@ -2,6 +2,15 @@ version = 1
+ revision = 3
+ requires-python = ">=3.12"
+ 
++[[package]]
++name = "aiofiles"
++version = "25.1.0"
++source = { registry = "https://pypi.org/simple" }
++sdist = { url = "https://files.pythonhosted.org/packages/41/c3/534eac40372d8ee36ef40df62ec129bee4fdb5ad9706e58a29be53b2c970/aiofiles-25.1.0.tar.gz", hash = "sha256:a8d728f0a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2", size = 46354, upload-time = "2025-10-09T20:51:04.358Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/bc/8a/340a1555ae33d7354dbca4faa54948d76d89a27ceef032c8c3bc661d003e/aiofiles-25.1.0-py3-none-any.whl", hash = "sha256:abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695", size = 14668, upload-time = "2025-10-09T20:51:03.174Z" },
++]
++
+ [[package]]
+ name = "annotated-doc"
+ version = "0.0.4"
+@@ -20,6 +29,28 @@ wheels = [
+     { url = "https://files.pythonhosted.org/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl", hash = "sha256:1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53", size = 13643, upload-time = "2024-05-20T21:33:24.1Z" },
+ ]
+ 
++[[package]]
++name = "anyio"
++version = "4.13.0"
++source = { registry = "https://pypi.org/simple" }
++dependencies = [
++    { name = "idna" },
++    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
++]
++sdist = { url = "https://files.pythonhosted.org/packages/19/14/2c5dd9f512b66549ae92767a9c7b330ae88e1932ca57876909410251fe13/anyio-4.13.0.tar.gz", hash = "sha256:334b70e641fd2221c1505b3890c69882fe4a2df910cba14d97019b90b24439dc", size = 231622, upload-time = "2026-03-24T12:59:09.671Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/da/42/e921fccf5015463e32a3cf6ee7f980a6ed0f395ceeaa45060b61d86486c2/anyio-4.13.0-py3-none-any.whl", hash = "sha256:08b310f9e24a9594186fd75b4f73f4a4152069e3853f1ed8bfbf58369f4ad708", size = 114353, upload-time = "2026-03-24T12:59:08.246Z" },
++]
++
++[[package]]
++name = "certifi"
++version = "2026.5.20"
++source = { registry = "https://pypi.org/simple" }
++sdist = { url = "https://files.pythonhosted.org/packages/f3/ce/ee2ecad540810a79593028e88299baeae54d346cc7a0d94b6199988b89b1/certifi-2026.5.20.tar.gz", hash = "sha256:69dea482ab64caa7b9f6aba1c6bf48bb6a5448d1c0f1b17ab42ad8c763a5344d", size = 135422, upload-time = "2026-05-20T11:46:50.073Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/59/8c/57e832b7af6d7c5abe66eb3fbe3a3a32f4d11ea23a1aa7131371035be991/certifi-2026.5.20-py3-none-any.whl", hash = "sha256:3c52e209ba0a4ad7aebe60436a4ab349c39e1e602e8c134221e546902ad25897", size = 134134, upload-time = "2026-05-20T11:46:48.578Z" },
++]
++
+ [[package]]
+ name = "colorama"
+ version = "0.4.6"
+@@ -29,6 +60,52 @@ wheels = [
+     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335, upload-time = "2022-10-25T02:36:20.889Z" },
+ ]
+ 
++[[package]]
++name = "h11"
++version = "0.16.0"
++source = { registry = "https://pypi.org/simple" }
++sdist = { url = "https://files.pythonhosted.org/packages/01/ee/02a2c011bdab74c6fb3c75474d40b3052059d95df7e73351460c8588d963/h11-0.16.0.tar.gz", hash = "sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1", size = 101250, upload-time = "2025-04-24T03:35:25.427Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/04/4b/29cac41a4d98d144bf5f6d33995617b185d14b22401f75ca86f384e87ff1/h11-0.16.0-py3-none-any.whl", hash = "sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86", size = 37515, upload-time = "2025-04-24T03:35:24.344Z" },
++]
++
++[[package]]
++name = "httpcore"
++version = "1.0.9"
++source = { registry = "https://pypi.org/simple" }
++dependencies = [
++    { name = "certifi" },
++    { name = "h11" },
++]
++sdist = { url = "https://files.pythonhosted.org/packages/06/94/82699a10bca87a5556c9c59b5963f2d039dbd239f25bc2a63907a05a14cb/httpcore-1.0.9.tar.gz", hash = "sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8", size = 85484, upload-time = "2025-04-24T22:06:22.219Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl", hash = "sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55", size = 78784, upload-time = "2025-04-24T22:06:20.566Z" },
++]
++
++[[package]]
++name = "httpx"
++version = "0.28.1"
++source = { registry = "https://pypi.org/simple" }
++dependencies = [
++    { name = "anyio" },
++    { name = "certifi" },
++    { name = "httpcore" },
++    { name = "idna" },
++]
++sdist = { url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc", size = 141406, upload-time = "2024-12-06T15:37:23.222Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
++]
++
++[[package]]
++name = "idna"
++version = "3.18"
++source = { registry = "https://pypi.org/simple" }
++sdist = { url = "https://files.pythonhosted.org/packages/cd/63/9496c57188a2ee585e0f1db071d75089a11e98aa86eb99d9d7618fc1edce/idna-3.18.tar.gz", hash = "sha256:ffb385a7e039654cef1ab9ef32c6fafe283c0c0467bba1d9029738ce4a14a848", size = 196711, upload-time = "2026-06-02T14:34:07.794Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl", hash = "sha256:7f952cbe720b688055e3f87de14f5c3e5fdaa8bc3928985c4077ca689de849a2", size = 65455, upload-time = "2026-06-02T14:34:06.319Z" },
++]
++
+ [[package]]
+ name = "iniconfig"
+ version = "2.3.0"
+@@ -192,6 +269,32 @@ wheels = [
+     { url = "https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl", hash = "sha256:2c5efc453d45394fdd706ade797c0a81091eccd1d6e4bccfcd476e2b8e0ab5d9", size = 375249, upload-time = "2026-04-07T17:16:16.13Z" },
+ ]
+ 
++[[package]]
++name = "pytest-asyncio"
++version = "1.4.0"
++source = { registry = "https://pypi.org/simple" }
++dependencies = [
++    { name = "pytest" },
++    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
++]
++sdist = { url = "https://files.pythonhosted.org/packages/43/7c/d36d04db312ecf4298932ef77e6e4a9e8ad017906e24e34f0b0c361a2473/pytest_asyncio-1.4.0.tar.gz", hash = "sha256:c6c0d2259945122819f171a32ecea2c349ead889ee28176caaf492143424be42", size = 58514, upload-time = "2026-05-26T09:56:04.083Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/03/e2/08a497ef684b88559c9cc5f4ad53a37e7b99e727094a86d6ea32536d5d3c/pytest_asyncio-1.4.0-py3-none-any.whl", hash = "sha256:933ca923a23075a87fb7070c0ec272a6848489824d887c85c812670932835aa1", size = 16930, upload-time = "2026-05-26T09:56:02.576Z" },
++]
++
++[[package]]
++name = "pytest-httpx"
++version = "0.36.2"
++source = { registry = "https://pypi.org/simple" }
++dependencies = [
++    { name = "httpx" },
++    { name = "pytest" },
++]
++sdist = { url = "https://files.pythonhosted.org/packages/4e/42/f53c58570e80d503ade9dd42ce57f2915d14bcbe25f6308138143950d1d6/pytest_httpx-0.36.2.tar.gz", hash = "sha256:05a56527484f7f4e8c856419ea379b8dc359c36801c4992fdb330f294c690356", size = 57683, upload-time = "2026-04-09T13:57:19.837Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/1e/55/1fa65f8e4fceb19dd6daa867c162ad845d547f6058cd92b4b02384a44777/pytest_httpx-0.36.2-py3-none-any.whl", hash = "sha256:d42ebd5679442dc7bfb0c48e0767b6562e9bc4534d805127b0084171886a5e22", size = 20315, upload-time = "2026-04-09T13:57:18.587Z" },
++]
++
+ [[package]]
+ name = "pyyaml"
+ version = "6.0.3"
+@@ -326,6 +429,8 @@ name = "ygo-ultime-deck"
+ version = "0.1.0"
+ source = { editable = "." }
+ dependencies = [
++    { name = "aiofiles" },
++    { name = "httpx" },
+     { name = "pydantic" },
+     { name = "pyyaml" },
+     { name = "rich" },
+@@ -335,11 +440,15 @@ dependencies = [
+ [package.dev-dependencies]
+ dev = [
+     { name = "pytest" },
++    { name = "pytest-asyncio" },
++    { name = "pytest-httpx" },
+     { name = "ruff" },
+ ]
+ 
+ [package.metadata]
+ requires-dist = [
++    { name = "aiofiles", specifier = ">=25.1.0" },
++    { name = "httpx", specifier = ">=0.28.1" },
+     { name = "pydantic", specifier = ">=2.13.4" },
+     { name = "pyyaml", specifier = ">=6.0.3" },
+     { name = "rich", specifier = ">=13.0.0" },
+@@ -349,5 +458,7 @@ requires-dist = [
+ [package.metadata.requires-dev]
+ dev = [
+     { name = "pytest", specifier = ">=9.0.3" },
++    { name = "pytest-asyncio", specifier = ">=1.4.0" },
++    { name = "pytest-httpx", specifier = ">=0.36.2" },
+     { name = "ruff", specifier = ">=0.15.16" },
+ ]

@@ -1,0 +1,331 @@
+﻿diff --git a/src/ygo_ultime_deck/models/simulation.py b/src/ygo_ultime_deck/models/simulation.py
+new file mode 100644
+index 0000000..178a72a
+--- /dev/null
++++ b/src/ygo_ultime_deck/models/simulation.py
+@@ -0,0 +1,13 @@
++from typing import List
++from pydantic import BaseModel, Field
++
++class Requirement(BaseModel):
++    name: str
++    count: int = Field(default=1, ge=1)
++
++class TargetCombo(BaseModel):
++    name: str
++    requirements: List[Requirement]
++
++class SimulationRequest(BaseModel):
++    combos: List[TargetCombo]
+diff --git a/src/ygo_ultime_deck/engine/config_parser.py b/src/ygo_ultime_deck/engine/config_parser.py
+new file mode 100644
+index 0000000..c30dffb
+--- /dev/null
++++ b/src/ygo_ultime_deck/engine/config_parser.py
+@@ -0,0 +1,39 @@
++import yaml
++import typer
++from rich.console import Console
++from pydantic import ValidationError
++from ygo_ultime_deck.models.simulation import SimulationRequest
++
++console = Console()
++
++def parse_target_combos(file_path: str) -> SimulationRequest:
++    try:
++        with open(file_path, 'r', encoding='utf-8') as f:
++            data = yaml.safe_load(f)
++            
++        if data is None:
++            data = {}
++            
++        return SimulationRequest(**data)
++        
++    except FileNotFoundError:
++        console.print(f"[bold red]Erreur critique :[/bold red] Le fichier '{file_path}' est introuvable.")
++        raise typer.Exit(1)
++    except IsADirectoryError:
++        console.print(f"[bold red]Erreur critique :[/bold red] '{file_path}' est un r├®pertoire, pas un fichier.")
++        raise typer.Exit(1)
++    except PermissionError:
++        console.print(f"[bold red]Erreur critique :[/bold red] Permission refus├®e pour lire '{file_path}'.")
++        raise typer.Exit(1)
++    except UnicodeDecodeError:
++        console.print(f"[bold red]Erreur critique :[/bold red] Le fichier '{file_path}' n'est pas encod├® en UTF-8.")
++        raise typer.Exit(1)
++    except yaml.YAMLError as e:
++        console.print(f"[bold red]Erreur critique :[/bold red] Le fichier YAML '{file_path}' est malform├®.\n{e}")
++        raise typer.Exit(1)
++    except ValidationError as e:
++        console.print(f"[bold red]Erreur critique :[/bold red] Le contenu du fichier '{file_path}' ne respecte pas le sch├®ma attendu.\n{e}")
++        raise typer.Exit(1)
++    except Exception as e:
++        console.print(f"[bold red]Erreur critique inattendue lors de la lecture de '{file_path}':[/bold red] {e}")
++        raise typer.Exit(1)
+diff --git a/config/target_combos.yaml b/config/target_combos.yaml
+new file mode 100644
+index 0000000..e59ee76
+--- /dev/null
++++ b/config/target_combos.yaml
+@@ -0,0 +1,25 @@
++# Fichier de configuration des combos ("Mains de R├¬ve")
++# ----------------------------------------------------
++# Chaque combo d├®finit un sc├®nario de victoire.
++# Le moteur va analyser la main pioch├®e et v├®rifier si elle 
++# satisfait l'un de ces combos.
++
++combos:
++  - name: "Full Combo (Standard)"
++    requirements:
++      - name: "Starter"
++        count: 1
++      - name: "Extender"
++        count: 1
++
++  - name: "Combo S├®curis├® (Anti-Handtrap)"
++    requirements:
++      - name: "Starter"
++        count: 1
++      - name: "Protection"
++        count: 1
++
++  - name: "One-Card Combo (Minimal)"
++    requirements:
++      - name: "1-Card-Starter"
++        count: 1
+diff --git a/tests/test_engine/test_combos_parser.py b/tests/test_engine/test_combos_parser.py
+new file mode 100644
+index 0000000..943e144
+--- /dev/null
++++ b/tests/test_engine/test_combos_parser.py
+@@ -0,0 +1,109 @@
++import pytest
++import typer
++from pydantic import ValidationError
++from ygo_ultime_deck.models.simulation import SimulationRequest, TargetCombo, Requirement
++from ygo_ultime_deck.engine.config_parser import parse_target_combos
++
++def test_simulation_request_valid():
++    data = {
++        "combos": [
++            {
++                "name": "Combo A",
++                "requirements": [
++                    {"name": "Starter", "count": 1},
++                    {"name": "Extender", "count": 1}
++                ]
++            }
++        ]
++    }
++    req = SimulationRequest(**data)
++    assert len(req.combos) == 1
++    combo = req.combos[0]
++    assert combo.name == "Combo A"
++    assert len(combo.requirements) == 2
++    assert combo.requirements[0].name == "Starter"
++    assert combo.requirements[0].count == 1
++
++def test_simulation_request_default_count():
++    data = {
++        "combos": [
++            {
++                "name": "Combo B",
++                "requirements": [
++                    {"name": "Starter"}
++                ]
++            }
++        ]
++    }
++    req = SimulationRequest(**data)
++    assert req.combos[0].requirements[0].count == 1
++
++def test_simulation_request_invalid_count():
++    data = {
++        "combos": [
++            {
++                "name": "Combo C",
++                "requirements": [
++                    {"name": "Starter", "count": -1}
++                ]
++            }
++        ]
++    }
++    with pytest.raises(ValidationError):
++        SimulationRequest(**data)
++
++def test_parse_target_combos_valid(tmp_path):
++    # Create a valid yaml file
++    yaml_file = tmp_path / "target_combos.yaml"
++    yaml_file.write_text('''
++combos:
++  - name: "Full Combo"
++    requirements:
++      - name: "Starter"
++        count: 1
++      - name: "Extender"
++        count: 1
++''', encoding="utf-8")
++
++    req = parse_target_combos(str(yaml_file))
++    assert isinstance(req, SimulationRequest)
++    assert len(req.combos) == 1
++    assert req.combos[0].name == "Full Combo"
++    assert len(req.combos[0].requirements) == 2
++
++def test_parse_target_combos_file_not_found():
++    with pytest.raises(typer.Exit):
++        parse_target_combos("non_existent_file.yaml")
++
++def test_parse_target_combos_invalid_yaml(tmp_path):
++    yaml_file = tmp_path / "invalid.yaml"
++    yaml_file.write_text('''
++combos:
++  - name: "Full Combo
++    requirements: [
++''', encoding="utf-8")
++
++    with pytest.raises(typer.Exit):
++        parse_target_combos(str(yaml_file))
++
++def test_parse_target_combos_invalid_schema(tmp_path):
++    yaml_file = tmp_path / "invalid_schema.yaml"
++    yaml_file.write_text('''
++combos:
++  - not_name: "Full Combo"
++''', encoding="utf-8")
++
++    with pytest.raises(typer.Exit):
++        parse_target_combos(str(yaml_file))
++
++def test_parse_target_combos_is_directory(tmp_path):
++    with pytest.raises(typer.Exit):
++        parse_target_combos(str(tmp_path))
++
++def test_parse_target_combos_unicode_decode_error(tmp_path):
++    yaml_file = tmp_path / "bad_encoding.yaml"
++    # Write some non-utf8 bytes that cannot be decoded as utf8
++    yaml_file.write_bytes(b'\xff\xfe\x00\x00')
++    
++    with pytest.raises(typer.Exit):
++        parse_target_combos(str(yaml_file))
+\ No newline at end of file
+diff --git a/_bmad-output/implementation-artifacts/sprint-status.yaml b/_bmad-output/implementation-artifacts/sprint-status.yaml
+index 597761f..3764cde 100644
+--- a/_bmad-output/implementation-artifacts/sprint-status.yaml
++++ b/_bmad-output/implementation-artifacts/sprint-status.yaml
+@@ -35,7 +35,7 @@
+ # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+ 
+ generated: 2026-06-11T07:33:10+02:00
+-last_updated: 2026-06-11T07:35:05+02:00
++last_updated: 2026-06-12T09:57:00+02:00
+ project: YGO ULTIME DECK
+ project_key: NOKEY
+ tracking_system: file-system
+@@ -44,18 +44,18 @@ story_location: c:/Users/kevin/Downloads/Projet code/YGO ULTIME DECK/_bmad-outpu
+ development_status:
+   epic-1: in-progress
+   1-1-initialisation-du-projet-socle-cli-typer: done
+-  1-2-modeles-de-donnees-pydantic-schema-v0-6-0: backlog
+-  1-3-telechargeur-ygojson-gestion-du-cache: backlog
+-  1-4-parseur-resilient-pre-filtrage-memoire: backlog
++  1-2-modeles-de-donnees-pydantic-schema-v0-6-0: done
++  1-3-telechargeur-ygojson-gestion-du-cache: done
++  1-4-parseur-resilient-pre-filtrage-memoire: done
+   epic-1-retrospective: optional
+-  epic-2: backlog
+-  2-1-moteur-d-expressions-regulieres-regex-psct: backlog
+-  2-2-fichier-de-configuration-externe-tags-rules-yaml: backlog
+-  2-3-implementation-du-multi-tagging-dynamique: backlog
++  epic-2: done
++  2-1-moteur-d-expressions-regulieres-regex-psct: done
++  2-2-fichier-de-configuration-externe-tags-rules-yaml: done
++  2-3-implementation-du-multi-tagging-dynamique: done
+   epic-2-retrospective: optional
+-  epic-3: backlog
+-  3-1-algorithme-hypergeometrique-logarithmique: backlog
+-  3-2-parseur-des-mains-de-reve-target-combos-yaml: backlog
++  epic-3: in-progress
++  3-1-algorithme-hypergeometrique-logarithmique: done
++  3-2-parseur-des-mains-de-reve-target-combos-yaml: review
+   3-3-moteur-de-simulation-monte-carlo-multiprocessing: backlog
+   3-4-resolution-des-resource-generators-pioche-dynamique: backlog
+   epic-3-retrospective: optional
+diff --git a/_bmad-output/implementation-artifacts/3-2-parseur-des-mains-de-reve-target-combos-yaml.md b/_bmad-output/implementation-artifacts/3-2-parseur-des-mains-de-reve-target-combos-yaml.md
+new file mode 100644
+index 0000000..028bec8
+--- /dev/null
++++ b/_bmad-output/implementation-artifacts/3-2-parseur-des-mains-de-reve-target-combos-yaml.md
+@@ -0,0 +1,72 @@
++---
++baseline_commit: 46f42b22ccca45bae82f54cbe7f2e967ffd20464
++# Story 3.2: Parseur des "Mains de R├¬ve" (target_combos.yaml)
++
++**Status:** in-progress
++**Epic:** 3 - Simulateur de Combos et Analyse Math├®matique
++
++## Story Requirements
++
++**User Story:**
++As a concepteur de deck (utilisateur CLI),
++I want d├®finir les cartes ou les tags requis pour un combo r├®ussi (ex: 1 Starter + 1 Extender) dans un fichier `config/target_combos.yaml`,
++So that je n'aie pas ├á ├®crire des arguments CLI complexes dans le terminal pour tester mes strat├®gies.
++
++**Acceptance Criteria:**
++- **Given** un fichier `target_combos.yaml` contenant plusieurs sc├®narios (Combo A, Combo B)
++- **When** la simulation d├®marre
++- **Then** le syst├¿me valide la syntaxe et convertit les requ├¬tes en objets Pydantic (ex: `SimulationRequest`)
++- **And** transmet ces param├¿tres proprement au moteur math├®matique.
++
++## Developer Context & Guardrails
++
++### Technical Requirements
++- Cr├®er un mod├¿le Pydantic `SimulationRequest` ou ├®quivalent pour parser et valider le contenu du fichier YAML.
++- Assurer le chargement s├®curis├® de `config/target_combos.yaml` (gestion stricte de `FileNotFoundError`, `yaml.YAMLError`, `PermissionError`, et `UnicodeDecodeError`).
++- Les sc├®narios dans le YAML doivent pouvoir sp├®cifier des noms de cartes exactes ou des tags s├®mantiques (ex: "Starter", "Extender") avec le nombre d'exemplaires requis en main (ex: ">= 1").
++- La sortie doit ├¬tre une s├®rie d'objets purs Pydantic.
++
++### Architecture Compliance
++- Strict respect de Pydantic V2 pour toute validation de donn├®es.
++- Le fichier lu r├®side obligatoirement dans `config/`.
++- La gestion des exceptions doit se faire via `Typer` et `Rich` (`typer.Exit(1)`), ne jamais utiliser `sys.exit` ni laisser fuiter des stacktraces.
++
++### Library / Framework Requirements
++- Utiliser `pyyaml` pour la lecture du fichier.
++- Utiliser `pydantic` pour d├®finir la structure attendue.
++
++### File Structure Requirements
++- **UPDATE** `src/ygo_ultime_deck/models/simulation.py` (ou ├®quivalent) pour ajouter le mod├¿le `SimulationRequest`.
++- **NEW/UPDATE** Module de lecture (ex: `src/ygo_ultime_deck/engine/config_parser.py` ou similaire, ou dans `rules/` selon l'impl├®mentation choisie par le d├®veloppeur, en coh├®rence avec le reste).
++- **NEW** Fichier d'exemple `config/target_combos.yaml`.
++- **NEW** Tests associ├®s `tests/test_engine/test_combos_parser.py` (ou ├®quivalent).
++
++### Testing Requirements
++- Test unitaire pour le parsing r├®ussi d'un YAML bien format├®.
++- Test unitaire v├®rifiant l'erreur de validation Pydantic si le YAML est malform├®.
++- Test unitaire simulant un `FileNotFoundError` (ou `IsADirectoryError`).
++- Test unitaire g├®rant les erreurs d'encodage (UnicodeDecodeError).
++
++## Previous Story Intelligence (from Story 3.1)
++- L'algorithme hyperg├®om├®trique dans `math_utils.py` attend (N, K, n, k). Le parseur YAML devra in fine fournir au moteur les "cibles" (ex: "Starter") pour que le simulateur trouve (K).
++- La code review de la Story 3.1 a soulev├® des erreurs non g├®r├®es dans les autres modules de config (`yaml.YAMLError`, `UnicodeDecodeError`, `IsADirectoryError`). Il est imp├®ratif de blinder ce parseur YAML d├¿s le d├®part contre ces exceptions.
++
++## Tasks / Subtasks
++- [x] Cr├®er les mod├¿les Pydantic de simulation dans `models/simulation.py`.
++- [x] D├®velopper la logique de parsing YAML robuste (gestion des erreurs d'IO et format).
++- [x] Cr├®er le fichier d'exemple `config/target_combos.yaml` contenant des "Mains de R├¬ve".
++- [x] Impl├®menter les tests unitaires associ├®s pour valider le tout de mani├¿re exhaustive.
++
++## Dev Agent Record
++- **Implementation Notes:** Created Pydantic models (`SimulationRequest`, `TargetCombo`, `Requirement`) in `models/simulation.py`. Implemented `parse_target_combos` in `engine/config_parser.py` with strict exception handling and formatting using Typer and Rich to avoid leaking stack traces. Handled `FileNotFoundError`, `IsADirectoryError`, `PermissionError`, `UnicodeDecodeError`, `yaml.YAMLError`, and `ValidationError`. Added the example `config/target_combos.yaml`.
++- **Tests Added:** Added `tests/test_engine/test_combos_parser.py` with 9 tests covering valid parsing, default values, negative counts, file not found, invalid schema, invalid yaml, directory error, and unicode decode errors. All 47 tests pass.
++
++### File List
++- `src/ygo_ultime_deck/models/simulation.py` (NEW)
++- `src/ygo_ultime_deck/engine/config_parser.py` (NEW)
++- `config/target_combos.yaml` (NEW)
++- `tests/test_engine/test_combos_parser.py` (NEW)
++
++## Completion Status
++- **Status Update:** review
++- **Note:** Ultimate context engine analysis completed - comprehensive developer guide created.

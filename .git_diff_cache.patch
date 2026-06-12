@@ -1,0 +1,296 @@
+﻿diff --git a/pyproject.toml b/pyproject.toml
+index 13fe6e0..6d49def 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -5,6 +5,7 @@ description = "Moteur d'optimisation de deck Yu-Gi-Oh!"
+ readme = "README.md"
+ requires-python = ">=3.12"
+ dependencies = [
++    "httpx>=0.28.1",
+     "pydantic>=2.13.4",
+     "pyyaml>=6.0.3",
+     "rich>=13.0.0",
+@@ -21,5 +22,7 @@ build-backend = "uv_build"
+ [dependency-groups]
+ dev = [
+     "pytest>=9.0.3",
++    "pytest-asyncio>=1.4.0",
++    "pytest-httpx>=0.36.2",
+     "ruff>=0.15.16",
+ ]
+diff --git a/src/ygo_ultime_deck/ingestion/__init__.py b/src/ygo_ultime_deck/ingestion/__init__.py
+new file mode 100644
+index 0000000..8dbb758
+--- /dev/null
++++ b/src/ygo_ultime_deck/ingestion/__init__.py
+@@ -0,0 +1 @@
++"""Ingestion module."""
+diff --git a/src/ygo_ultime_deck/ingestion/downloader.py b/src/ygo_ultime_deck/ingestion/downloader.py
+new file mode 100644
+index 0000000..c04b9b6
+--- /dev/null
++++ b/src/ygo_ultime_deck/ingestion/downloader.py
+@@ -0,0 +1,26 @@
++import httpx
++from pathlib import Path
++from rich.progress import Progress
++
++DEFAULT_URL = "https://json.yugioh.com/api/v0.6.0/aggregate.zip"
++
++async def download_ygojson(target_path: Path, url: str = DEFAULT_URL) -> None:
++    """Download YGOJSON zip file asynchronously.
++    
++    Args:
++        target_path: Where to save the file.
++        url: The URL to download from.
++    """
++    target_path.parent.mkdir(parents=True, exist_ok=True)
++    
++    async with httpx.AsyncClient() as client:
++        async with client.stream("GET", url) as response:
++            response.raise_for_status()
++            total = int(response.headers.get("Content-Length", 0))
++            
++            with Progress() as progress:
++                task = progress.add_task("[cyan]Downloading YGOJSON...", total=total)
++                with open(target_path, "wb") as f:
++                    async for chunk in response.aiter_bytes():
++                        f.write(chunk)
++                        progress.update(task, advance=len(chunk))
+diff --git a/src/ygo_ultime_deck/main.py b/src/ygo_ultime_deck/main.py
+index 7f6b1c2..0534eba 100644
+--- a/src/ygo_ultime_deck/main.py
++++ b/src/ygo_ultime_deck/main.py
+@@ -1,4 +1,8 @@
+ import sys
++import asyncio
++from pathlib import Path
++
++import httpx
+ import typer
+ from rich.console import Console
+ 
+@@ -14,12 +18,30 @@ def global_exception_handler(exc_type, exc_value, exc_traceback):
+ 
+ sys.excepthook = global_exception_handler
+ 
+-@app.callback()
+-def main():
++
++@app.callback(invoke_without_command=True)
++def main(
++    ctx: typer.Context,
++    update: bool = typer.Option(False, "--update", help="T├®l├®charger et mettre ├á jour le cache YGOJSON"),
++):
+     """
+     [bold green]YGO ULTIME DECK[/bold green] - Moteur math├®matique et analytique pour Yu-Gi-Oh!
+     """
+-    pass
++    if update:
++        from ygo_ultime_deck.ingestion.downloader import download_ygojson
++        target_path = Path("data/cache/aggregate.zip")
++        try:
++            asyncio.run(download_ygojson(target_path=target_path))
++            console.print("[bold green]T├®l├®chargement termin├® avec succ├¿s ![/bold green]")
++        except httpx.RequestError as e:
++            console.print(f"[bold red]Erreur r├®seau lors du t├®l├®chargement :[/bold red] {e}")
++            raise typer.Exit(1)
++        except Exception as e:
++            console.print(f"[bold red]Erreur inattendue :[/bold red] {e}")
++            raise typer.Exit(1)
++            
++    elif ctx.invoked_subcommand is None:
++        console.print(ctx.get_help())
+ 
+ if __name__ == "__main__":
+     app()
+diff --git a/tests/test_ingestion/__init__.py b/tests/test_ingestion/__init__.py
+new file mode 100644
+index 0000000..077b70e
+--- /dev/null
++++ b/tests/test_ingestion/__init__.py
+@@ -0,0 +1 @@
++"""Ingestion tests."""
+diff --git a/tests/test_ingestion/test_downloader.py b/tests/test_ingestion/test_downloader.py
+new file mode 100644
+index 0000000..1dc6deb
+--- /dev/null
++++ b/tests/test_ingestion/test_downloader.py
+@@ -0,0 +1,27 @@
++import pytest
++import httpx
++from ygo_ultime_deck.ingestion.downloader import download_ygojson
++
++@pytest.mark.asyncio
++async def test_download_success(httpx_mock, tmp_path):
++    # Setup mock file
++    mock_file_content = b"fake zip content"
++    httpx_mock.add_response(url="https://json.yugioh.com/api/v0.6.0/aggregate.zip", content=mock_file_content)
++    
++    # Run the downloader
++    target_path = tmp_path / "cache" / "aggregate.zip"
++    await download_ygojson(target_path=target_path)
++    
++    # Assert file is downloaded
++    assert target_path.exists()
++    assert target_path.read_bytes() == mock_file_content
++
++@pytest.mark.asyncio
++async def test_download_failure(httpx_mock, tmp_path):
++    httpx_mock.add_exception(httpx.RequestError("Mock network error"))
++    
++    target_path = tmp_path / "cache" / "aggregate.zip"
++    
++    # Test that it raises a specific exception we can catch in CLI
++    with pytest.raises(httpx.RequestError):
++        await download_ygojson(target_path=target_path)
+diff --git a/uv.lock b/uv.lock
+index 8855b97..c6246da 100644
+--- a/uv.lock
++++ b/uv.lock
+@@ -20,6 +20,28 @@ wheels = [
+     { url = "https://files.pythonhosted.org/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl", hash = "sha256:1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53", size = 13643, upload-time = "2024-05-20T21:33:24.1Z" },
+ ]
+ 
++[[package]]
++name = "anyio"
++version = "4.13.0"
++source = { registry = "https://pypi.org/simple" }
++dependencies = [
++    { name = "idna" },
++    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
++]
++sdist = { url = "https://files.pythonhosted.org/packages/19/14/2c5dd9f512b66549ae92767a9c7b330ae88e1932ca57876909410251fe13/anyio-4.13.0.tar.gz", hash = "sha256:334b70e641fd2221c1505b3890c69882fe4a2df910cba14d97019b90b24439dc", size = 231622, upload-time = "2026-03-24T12:59:09.671Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/da/42/e921fccf5015463e32a3cf6ee7f980a6ed0f395ceeaa45060b61d86486c2/anyio-4.13.0-py3-none-any.whl", hash = "sha256:08b310f9e24a9594186fd75b4f73f4a4152069e3853f1ed8bfbf58369f4ad708", size = 114353, upload-time = "2026-03-24T12:59:08.246Z" },
++]
++
++[[package]]
++name = "certifi"
++version = "2026.5.20"
++source = { registry = "https://pypi.org/simple" }
++sdist = { url = "https://files.pythonhosted.org/packages/f3/ce/ee2ecad540810a79593028e88299baeae54d346cc7a0d94b6199988b89b1/certifi-2026.5.20.tar.gz", hash = "sha256:69dea482ab64caa7b9f6aba1c6bf48bb6a5448d1c0f1b17ab42ad8c763a5344d", size = 135422, upload-time = "2026-05-20T11:46:50.073Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/59/8c/57e832b7af6d7c5abe66eb3fbe3a3a32f4d11ea23a1aa7131371035be991/certifi-2026.5.20-py3-none-any.whl", hash = "sha256:3c52e209ba0a4ad7aebe60436a4ab349c39e1e602e8c134221e546902ad25897", size = 134134, upload-time = "2026-05-20T11:46:48.578Z" },
++]
++
+ [[package]]
+ name = "colorama"
+ version = "0.4.6"
+@@ -29,6 +51,52 @@ wheels = [
+     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335, upload-time = "2022-10-25T02:36:20.889Z" },
+ ]
+ 
++[[package]]
++name = "h11"
++version = "0.16.0"
++source = { registry = "https://pypi.org/simple" }
++sdist = { url = "https://files.pythonhosted.org/packages/01/ee/02a2c011bdab74c6fb3c75474d40b3052059d95df7e73351460c8588d963/h11-0.16.0.tar.gz", hash = "sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1", size = 101250, upload-time = "2025-04-24T03:35:25.427Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/04/4b/29cac41a4d98d144bf5f6d33995617b185d14b22401f75ca86f384e87ff1/h11-0.16.0-py3-none-any.whl", hash = "sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86", size = 37515, upload-time = "2025-04-24T03:35:24.344Z" },
++]
++
++[[package]]
++name = "httpcore"
++version = "1.0.9"
++source = { registry = "https://pypi.org/simple" }
++dependencies = [
++    { name = "certifi" },
++    { name = "h11" },
++]
++sdist = { url = "https://files.pythonhosted.org/packages/06/94/82699a10bca87a5556c9c59b5963f2d039dbd239f25bc2a63907a05a14cb/httpcore-1.0.9.tar.gz", hash = "sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8", size = 85484, upload-time = "2025-04-24T22:06:22.219Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl", hash = "sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55", size = 78784, upload-time = "2025-04-24T22:06:20.566Z" },
++]
++
++[[package]]
++name = "httpx"
++version = "0.28.1"
++source = { registry = "https://pypi.org/simple" }
++dependencies = [
++    { name = "anyio" },
++    { name = "certifi" },
++    { name = "httpcore" },
++    { name = "idna" },
++]
++sdist = { url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc", size = 141406, upload-time = "2024-12-06T15:37:23.222Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
++]
++
++[[package]]
++name = "idna"
++version = "3.18"
++source = { registry = "https://pypi.org/simple" }
++sdist = { url = "https://files.pythonhosted.org/packages/cd/63/9496c57188a2ee585e0f1db071d75089a11e98aa86eb99d9d7618fc1edce/idna-3.18.tar.gz", hash = "sha256:ffb385a7e039654cef1ab9ef32c6fafe283c0c0467bba1d9029738ce4a14a848", size = 196711, upload-time = "2026-06-02T14:34:07.794Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl", hash = "sha256:7f952cbe720b688055e3f87de14f5c3e5fdaa8bc3928985c4077ca689de849a2", size = 65455, upload-time = "2026-06-02T14:34:06.319Z" },
++]
++
+ [[package]]
+ name = "iniconfig"
+ version = "2.3.0"
+@@ -192,6 +260,32 @@ wheels = [
+     { url = "https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl", hash = "sha256:2c5efc453d45394fdd706ade797c0a81091eccd1d6e4bccfcd476e2b8e0ab5d9", size = 375249, upload-time = "2026-04-07T17:16:16.13Z" },
+ ]
+ 
++[[package]]
++name = "pytest-asyncio"
++version = "1.4.0"
++source = { registry = "https://pypi.org/simple" }
++dependencies = [
++    { name = "pytest" },
++    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
++]
++sdist = { url = "https://files.pythonhosted.org/packages/43/7c/d36d04db312ecf4298932ef77e6e4a9e8ad017906e24e34f0b0c361a2473/pytest_asyncio-1.4.0.tar.gz", hash = "sha256:c6c0d2259945122819f171a32ecea2c349ead889ee28176caaf492143424be42", size = 58514, upload-time = "2026-05-26T09:56:04.083Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/03/e2/08a497ef684b88559c9cc5f4ad53a37e7b99e727094a86d6ea32536d5d3c/pytest_asyncio-1.4.0-py3-none-any.whl", hash = "sha256:933ca923a23075a87fb7070c0ec272a6848489824d887c85c812670932835aa1", size = 16930, upload-time = "2026-05-26T09:56:02.576Z" },
++]
++
++[[package]]
++name = "pytest-httpx"
++version = "0.36.2"
++source = { registry = "https://pypi.org/simple" }
++dependencies = [
++    { name = "httpx" },
++    { name = "pytest" },
++]
++sdist = { url = "https://files.pythonhosted.org/packages/4e/42/f53c58570e80d503ade9dd42ce57f2915d14bcbe25f6308138143950d1d6/pytest_httpx-0.36.2.tar.gz", hash = "sha256:05a56527484f7f4e8c856419ea379b8dc359c36801c4992fdb330f294c690356", size = 57683, upload-time = "2026-04-09T13:57:19.837Z" }
++wheels = [
++    { url = "https://files.pythonhosted.org/packages/1e/55/1fa65f8e4fceb19dd6daa867c162ad845d547f6058cd92b4b02384a44777/pytest_httpx-0.36.2-py3-none-any.whl", hash = "sha256:d42ebd5679442dc7bfb0c48e0767b6562e9bc4534d805127b0084171886a5e22", size = 20315, upload-time = "2026-04-09T13:57:18.587Z" },
++]
++
+ [[package]]
+ name = "pyyaml"
+ version = "6.0.3"
+@@ -326,6 +420,7 @@ name = "ygo-ultime-deck"
+ version = "0.1.0"
+ source = { editable = "." }
+ dependencies = [
++    { name = "httpx" },
+     { name = "pydantic" },
+     { name = "pyyaml" },
+     { name = "rich" },
+@@ -335,11 +430,14 @@ dependencies = [
+ [package.dev-dependencies]
+ dev = [
+     { name = "pytest" },
++    { name = "pytest-asyncio" },
++    { name = "pytest-httpx" },
+     { name = "ruff" },
+ ]
+ 
+ [package.metadata]
+ requires-dist = [
++    { name = "httpx", specifier = ">=0.28.1" },
+     { name = "pydantic", specifier = ">=2.13.4" },
+     { name = "pyyaml", specifier = ">=6.0.3" },
+     { name = "rich", specifier = ">=13.0.0" },
+@@ -349,5 +447,7 @@ requires-dist = [
+ [package.metadata.requires-dev]
+ dev = [
+     { name = "pytest", specifier = ">=9.0.3" },
++    { name = "pytest-asyncio", specifier = ">=1.4.0" },
++    { name = "pytest-httpx", specifier = ">=0.36.2" },
+     { name = "ruff", specifier = ">=0.15.16" },
+ ]

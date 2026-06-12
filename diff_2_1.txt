@@ -1,0 +1,332 @@
+﻿diff --git a/_bmad-output/implementation-artifacts/2-1-moteur-d-expressions-regulieres-regex-psct.md b/_bmad-output/implementation-artifacts/2-1-moteur-d-expressions-regulieres-regex-psct.md
+new file mode 100644
+index 0000000..f3a78c9
+--- /dev/null
++++ b/_bmad-output/implementation-artifacts/2-1-moteur-d-expressions-regulieres-regex-psct.md
+@@ -0,0 +1,88 @@
++---
++baseline_commit: 46f42b22ccca45bae82f54cbe7f2e967ffd20464
++# Story 2.1: Moteur d'Expressions R├®guli├¿res (Regex PSCT)
++
++**Status:** review
++**Epic:** 2 - Personnalisation et Auto-Tagging S├®mantique
++
++## Story Requirements
++
++**User Story:**
++As a moteur de cat├®gorisation,
++I want utiliser des expressions r├®guli├¿res (Regex) pr├®-compil├®es pour scanner les textes d'effets des cartes,
++So that l'identification des m├®caniques de jeu (ex: "Add 1 card", "Special Summon") soit quasi-instantan├®e et ne d├®pende pas d'une intelligence artificielle (NLP) lourde.
++
++**Acceptance Criteria:**
++- **Given** un objet `CardModel` contenant un texte d'effet de type PSCT
++- **When** la fonction de tagging s├®mantique scanne la description
++- **Then** l'algorithme fait correspondre le texte avec les Regex sans crash (m├¬me sur des textes tr├¿s longs ou complexes)
++- **And** attribue le tag ad├®quat dans un temps de calcul minimal.
++
++## Developer Context & Guardrails
++
++### Technical Requirements
++- Cr├®er ou mettre ├á jour le module de r├¿gles, sp├®cifiquement `src/ygo_ultime_deck/rules/tagger.py`.
++- Le moteur doit exposer une fonction recevant un objet `CardModel` et une s├®rie de r├¿gles Regex.
++- Il doit appliquer les expressions r├®guli├¿res (id├®alement pr├®-compil├®es via `re.compile()`) sur le texte de l'effet de la carte (`desc`).
++- Le syst├¿me de tagging doit enrichir l'objet avec ses tags. Pour respecter l'immuabilit├® et la puret├®, le module devrait retourner un nouveau mod├¿le Pydantic, par exemple `TaggedCardModel`, h├®ritant de `CardModel` avec un attribut `tags: list[str]`.
++
++### Architecture Compliance
++- **Data Boundaries:** Ce module est la deuxi├¿me ├®tape du pipeline unidirectionnel : `Ingestion -> Rules`. Il ne fait pas d'appels externes, il re├ºoit des `CardModel` purs.
++- **Data Purity:** Pydantic doit toujours ├¬tre utilis├®. Les mod├¿les instanci├®s par ce module devront ├¬tre picklables pour l'├®tape suivante (Engine).
++- **Performance:** Les Regex doivent ├¬tre pr├®-compil├®es au chargement des r├¿gles pour ├®viter des p├®nalit├®s lors de la boucle sur les milliers de cartes.
++
++### Library/Framework Requirements
++- `re` (Standard Python library).
++- `pydantic` (d├®j├á install├®, pour le `TaggedCardModel`).
++
++### File Structure Requirements
++- `src/ygo_ultime_deck/models/card.py` (Mise ├á jour potentielle pour int├®grer `TaggedCardModel` ou `tags` optionnel).
++- `src/ygo_ultime_deck/rules/tagger.py` (Nouveau module pour la logique Regex).
++- `tests/test_rules/test_tagger.py` (Tests unitaires associ├®s).
++
++### Testing Requirements
++- Cr├®er une suite de tests unitaires simulant diff├®rentes descriptions complexes PSCT (Problem-Solving Card Text).
++- V├®rifier que le moteur ne plante pas sur des textes inattendus ou tr├¿s longs.
++- Mesurer que l'affectation du tag se fait correctement selon une regex d├®finie (ex: `r"Add .* from your Deck to your hand"` pour le tag "Searcher").
++
++## Previous Story Intelligence
++- Le `CardModel` actuel est configur├® avec `extra="ignore"`. Les attributs non explicitement d├®finis sont ignor├®s. Il est pr├®f├®rable de cr├®er un sous-mod├¿le Pydantic ou de modifier `CardModel` pour y ajouter `tags: list[str] = Field(default_factory=list)`.
++- Lors de l'Epic 1 (Ingestion), le parser a ├®t├® rendu ultra-r├®silient avec des try/except et des v├®rifications de types pour ignorer les cartes inattendues. Ce tagger devrait ├®galement g├®rer l'absence d'effets (ex: monstres normaux) sans lever d'exceptions.
++
++## Git Intelligence
++- Le projet respecte rigoureusement `Ruff` pour le formatage et le linting.
++- Garder les docstrings selon les conventions ├®tablies et ex├®cuter `uv run ruff check --fix` avant commit.
++
++## Tasks / Subtasks
++- [x] Mettre ├á jour `CardModel` ou cr├®er `TaggedCardModel` avec un champ `tags`.
++- [x] Cr├®er `src/ygo_ultime_deck/rules/tagger.py` pour le moteur de scan Regex.
++- [x] Pr├®-compiler un jeu de Regex d'exemple et l'appliquer sur la propri├®t├® `desc`.
++- [x] Cr├®er `tests/test_rules/test_tagger.py` pour valider la vitesse et la pr├®cision du Moteur Regex.
++- [x] Valider avec `pytest` et corriger les erreurs de linting avec `ruff`.
++
++## Project Context Reference
++Ce module (Rules/Tagger) sera nourri par le YAML lors de la prochaine story, mais il doit d'abord disposer du c┼ôur de la m├®canique Regex (Story 2.1) avant de dynamiser ses inputs (Story 2.2).
++
++## Completion Status
++- **Status Update:** review
++- **Note:** Ultimate context engine analysis completed - comprehensive developer guide created
++
++## Dev Agent Record
++### Debug Log
++- N/A
++
++### Completion Notes
++- Impl├®mentation du mod├¿le `TaggedCardModel` h├®ritant de `CardModel`.
++- D├®veloppement de `RegexTagger` pour analyser les textes avec r├®silience et `re.IGNORECASE`.
++- Ajout de la suite de tests compl├¿tes simulant diff├®rents comportements (basic, no match, multiple matches, very long string).
++- Les v├®rifications Ruff et Pytest (y compris r├®trocompatibilit├®) passent ├á 100%.
++
++## File List
++- `src/ygo_ultime_deck/models/card.py`
++- `src/ygo_ultime_deck/rules/__init__.py`
++- `src/ygo_ultime_deck/rules/tagger.py`
++- `tests/test_rules/test_tagger.py`
++
++## Change Log
++- Ajout du tagger regex et du support Pydantic pour l'export des tags.
++---
+diff --git a/src/ygo_ultime_deck/models/card.py b/src/ygo_ultime_deck/models/card.py
+new file mode 100644
+index 0000000..035b1d1
+--- /dev/null
++++ b/src/ygo_ultime_deck/models/card.py
+@@ -0,0 +1,86 @@
++from pydantic import BaseModel, Field, ConfigDict, field_validator
++from typing import Optional
++from enum import Enum
++
++class CardAttribute(str, Enum):
++    DARK = "DARK"
++    EARTH = "EARTH"
++    FIRE = "FIRE"
++    LIGHT = "LIGHT"
++    WATER = "WATER"
++    WIND = "WIND"
++    DIVINE = "DIVINE"
++
++class CardRace(str, Enum):
++    AQUA = "Aqua"
++    BEAST = "Beast"
++    BEAST_WARRIOR = "Beast-Warrior"
++    CREATOR_GOD = "Creator-God"
++    CYBERSE = "Cyberse"
++    DINOSAUR = "Dinosaur"
++    DIVINE_BEAST = "Divine-Beast"
++    DRAGON = "Dragon"
++    FAIRY = "Fairy"
++    FIEND = "Fiend"
++    FISH = "Fish"
++    INSECT = "Insect"
++    ILLUSION = "Illusion"
++    MACHINE = "Machine"
++    PLANT = "Plant"
++    PSYCHIC = "Psychic"
++    PYRO = "Pyro"
++    REPTILE = "Reptile"
++    ROCK = "Rock"
++    SEA_SERPENT = "Sea Serpent"
++    SPELLCASTER = "Spellcaster"
++    THUNDER = "Thunder"
++    WARRIOR = "Warrior"
++    WINGED_BEAST = "Winged Beast"
++    WYRM = "Wyrm"
++    ZOMBIE = "Zombie"
++    # Spell/Trap races
++    NORMAL = "Normal"
++    FIELD = "Field"
++    EQUIP = "Equip"
++    CONTINUOUS = "Continuous"
++    QUICK_PLAY = "Quick-Play"
++    RITUAL = "Ritual"
++    COUNTER = "Counter"
++
++class CardModel(BaseModel):
++    """Pydantic model representing a YGOJSON card."""
++    
++    model_config = ConfigDict(
++        populate_by_name=True,
++        extra="ignore"
++    )
++    
++    id: str
++    name: str
++    card_type: str = Field(alias="type")
++    desc: str
++    
++    # Optional attributes
++    race: Optional[CardRace] = None
++    atk: Optional[int] = Field(default=None, ge=-1)
++    def_: Optional[int] = Field(default=None, alias="def", ge=-1)
++    level: Optional[int] = Field(default=None, ge=0, le=13)
++    attribute: Optional[CardAttribute] = None
++    series: Optional[str] = None
++    
++    # Additional common optional attributes based on YGOJSON schema
++    archetype: Optional[str] = None
++    scale: Optional[int] = Field(default=None, ge=0, le=13)
++    linkval: Optional[int] = Field(default=None, ge=1, le=8)
++    linkmarkers: Optional[list[str]] = None
++
++    @field_validator("atk", "def_", mode="before")
++    @classmethod
++    def handle_question_mark_stats(cls, v):
++        if v == "?":
++            return -1
++        return v
++
++class TaggedCardModel(CardModel):
++    """A CardModel that has been enriched with semantic tags."""
++    tags: list[str] = Field(default_factory=list)
+diff --git a/src/ygo_ultime_deck/rules/__init__.py b/src/ygo_ultime_deck/rules/__init__.py
+new file mode 100644
+index 0000000..18aeb1f
+--- /dev/null
++++ b/src/ygo_ultime_deck/rules/__init__.py
+@@ -0,0 +1,3 @@
++from ygo_ultime_deck.rules.tagger import RegexTagger
++
++__all__ = ["RegexTagger"]
+diff --git a/src/ygo_ultime_deck/rules/tagger.py b/src/ygo_ultime_deck/rules/tagger.py
+new file mode 100644
+index 0000000..7998a1d
+--- /dev/null
++++ b/src/ygo_ultime_deck/rules/tagger.py
+@@ -0,0 +1,39 @@
++import re
++from typing import Dict, Pattern
++from ygo_ultime_deck.models.card import CardModel, TaggedCardModel
++
++class RegexTagger:
++    """Categorizes cards using pre-compiled regular expressions."""
++    
++    def __init__(self, rules: Dict[str, str]):
++        """
++        Initialize the tagger with a dictionary of rules.
++        
++        Args:
++            rules: A dictionary where keys are tag names and values are regex patterns.
++        """
++        self.compiled_rules: Dict[str, Pattern] = {}
++        for tag, pattern in rules.items():
++            # Use re.IGNORECASE if needed, but standard PSCT usually has consistent casing.
++            # We will use re.IGNORECASE to be more resilient as a good practice unless specified otherwise.
++            self.compiled_rules[tag] = re.compile(pattern, re.IGNORECASE)
++            
++    def tag_card(self, card: CardModel) -> TaggedCardModel:
++        """
++        Evaluate a card's description against the compiled regex rules and return a new TaggedCardModel.
++        
++        Args:
++            card: The original CardModel.
++            
++        Returns:
++            A new TaggedCardModel with the matched tags appended.
++        """
++        matched_tags = []
++        desc = card.desc or ""
++        
++        for tag, compiled_pattern in self.compiled_rules.items():
++            if compiled_pattern.search(desc):
++                matched_tags.append(tag)
++                
++        card_data = card.model_dump(by_alias=True)
++        return TaggedCardModel(**card_data, tags=matched_tags)
+diff --git a/tests/test_rules/test_tagger.py b/tests/test_rules/test_tagger.py
+new file mode 100644
+index 0000000..7644cee
+--- /dev/null
++++ b/tests/test_rules/test_tagger.py
+@@ -0,0 +1,86 @@
++from ygo_ultime_deck.models.card import CardModel, TaggedCardModel
++from ygo_ultime_deck.rules.tagger import RegexTagger
++
++def test_tagged_card_model():
++    card = TaggedCardModel(
++        id="123",
++        name="Test Card",
++        type="Effect Monster",
++        desc="A test description.",
++        tags=["Searcher"]
++    )
++    assert "Searcher" in card.tags
++    assert card.name == "Test Card"
++
++def test_regex_tagger_basic_match():
++    card = CardModel(
++        id="456",
++        name="Reinforcement of the Army",
++        type="Spell Card",
++        desc="Add 1 Level 4 or lower Warrior monster from your Deck to your hand."
++    )
++    
++    rules = {
++        "Searcher": r"Add .* from your Deck to your hand"
++    }
++    
++    tagger = RegexTagger(rules)
++    tagged_card = tagger.tag_card(card)
++    
++    assert isinstance(tagged_card, TaggedCardModel)
++    assert "Searcher" in tagged_card.tags
++    assert tagged_card.id == card.id
++
++def test_regex_tagger_no_match():
++    card = CardModel(
++        id="789",
++        name="Dark Magician",
++        type="Normal Monster",
++        desc="The ultimate wizard in terms of attack and defense."
++    )
++    
++    rules = {
++        "Searcher": r"Add .* from your Deck to your hand"
++    }
++    
++    tagger = RegexTagger(rules)
++    tagged_card = tagger.tag_card(card)
++    
++    assert isinstance(tagged_card, TaggedCardModel)
++    assert len(tagged_card.tags) == 0
++
++def test_regex_tagger_multiple_matches():
++    card = CardModel(
++        id="101",
++        name="Combo Card",
++        type="Effect Monster",
++        desc="Special Summon this card. Add 1 card from your Deck to your hand."
++    )
++    
++    rules = {
++        "Searcher": r"Add .* from your Deck to your hand",
++        "Extender": r"Special Summon this card"
++    }
++    
++    tagger = RegexTagger(rules)
++    tagged_card = tagger.tag_card(card)
++    
++    assert "Searcher" in tagged_card.tags
++    assert "Extender" in tagged_card.tags
++    assert len(tagged_card.tags) == 2
++
++def test_regex_tagger_complex_text_no_crash():
++    card = CardModel(
++        id="102",
++        name="Very Long Text Card",
++        type="Effect Monster",
++        desc="A" * 10000  # Extremely long text to test regex performance/crash
++    )
++    
++    rules = {
++        "Searcher": r"Add .* from your Deck to your hand"
++    }
++    
++    tagger = RegexTagger(rules)
++    tagged_card = tagger.tag_card(card)
++    assert len(tagged_card.tags) == 0
