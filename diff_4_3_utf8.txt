@@ -1,0 +1,189 @@
+﻿diff --git a/_bmad-output/implementation-artifacts/4-3-optimiseur-dynamique-de-taille-de-deck-40-a-60-cartes.md b/_bmad-output/implementation-artifacts/4-3-optimiseur-dynamique-de-taille-de-deck-40-a-60-cartes.md
+index 2a137b2..f8ae522 100644
+--- a/_bmad-output/implementation-artifacts/4-3-optimiseur-dynamique-de-taille-de-deck-40-a-60-cartes.md
++++ b/_bmad-output/implementation-artifacts/4-3-optimiseur-dynamique-de-taille-de-deck-40-a-60-cartes.md
+@@ -1,4 +1,5 @@
+ ---
++baseline_commit: 960f0b0d23006248bf135960e22b63bb6a0e271e
+ # Story 4.3: Optimiseur Dynamique de Taille de Deck (40 ├á 60 cartes)
+ 
+ **Status:** ready-for-dev
+@@ -42,20 +43,21 @@ So that l'algorithme puisse justifier math├®matiquement d'augmenter la taille du
+ - Test o├╣ la contrainte des 85% force une taille de deck sp├®cifique.
+ 
+ ## Tasks / Subtasks
+-- [ ] Impl├®menter la fonction d'optimisation (balayage de 40 ├á 60).
+-- [ ] Int├®grer les calculs de probabilit├®s hyperg├®om├®triques pour l'optimum.
+-- [ ] Ajouter les tests unitaires pour valider les r├®sultats avec des configurations connues.
++- [x] Impl├®menter la fonction d'optimisation (balayage de 40 ├á 60).
++- [x] Int├®grer les calculs de probabilit├®s hyperg├®om├®triques pour l'optimum.
++- [x] Ajouter les tests unitaires pour valider les r├®sultats avec des configurations connues.
+ 
+ ## Dev Agent Record
+-- **Implementation Notes:** (To be filled by the dev agent)
+-- **Tests Added:** (To be filled by the dev agent)
++- **Implementation Notes:** L'optimiseur utilise l'algorithme hyperg├®om├®trique de l'Epic 3 pour simuler 21 tailles de deck (40 ├á 60). Il calcule P(Starter >= 1) et P(Garnet == 0). Si un deck atteint les 85% de Starter, il s├®lectionne celui qui a le moins de Garnets. S'il n'y a pas de Garnet, il favorise toujours le plus petit deck. La fonction est `O(n)` sur la plage de deck (donc 21 it├®rations) et est instantan├®e.
++- **Tests Added:** `tests/test_engine/test_optimizer.py` avec 5 tests v├®rifiant les extr├¬mes (0 garnet = 40 cartes, beaucoup de garnets = > 40 cartes, fallback consistency = 40, core size override, max size exception).
+ 
+ ### File List
+-- (To be filled by the dev agent)
++- `src/ygo_ultime_deck/engine/optimizer.py` (NEW)
++- `tests/test_engine/test_optimizer.py` (NEW)
+ 
+ ## Change Log
+-- (To be filled by the dev agent)
++- Ajout du module `optimizer.py` capable de calculer math├®matiquement la taille id├®ale d'un deck selon le ratio Starter/Garnet.
+ 
+ ## Completion Status
+-- **Status Update:** ready-for-dev
++- **Status Update:** review
+ - **Note:** Initial story definition completed.
+diff --git a/_bmad-output/implementation-artifacts/sprint-status.yaml b/_bmad-output/implementation-artifacts/sprint-status.yaml
+index f2127fe..4cb38a2 100644
+--- a/_bmad-output/implementation-artifacts/sprint-status.yaml
++++ b/_bmad-output/implementation-artifacts/sprint-status.yaml
+@@ -62,6 +62,6 @@ development_status:
+   epic-4: in-progress
+   4-1-parseur-des-menaces-de-la-meta-meta-targets-yaml: done
+   4-2-simulation-de-l-immunite-counter-matching: done
+-  4-3-optimiseur-dynamique-de-taille-de-deck-40-a-60-cartes: ready-for-dev
++  4-3-optimiseur-dynamique-de-taille-de-deck-40-a-60-cartes: review
+   4-4-module-d-audit-cli-et-exportation-ydk: backlog
+   epic-4-retrospective: optional
+diff --git a/src/ygo_ultime_deck/engine/optimizer.py b/src/ygo_ultime_deck/engine/optimizer.py
+new file mode 100644
+index 0000000..1ac5f19
+--- /dev/null
++++ b/src/ygo_ultime_deck/engine/optimizer.py
+@@ -0,0 +1,88 @@
++from typing import Tuple, Dict, Any, List
++from ygo_ultime_deck.engine.math_utils import calculate_hypergeometric
++
++def get_probability_at_least_one(deck_size: int, success_count: int, hand_size: int) -> float:
++    """
++    Calcule la probabilit├® de piocher AU MOINS 1 exemplaire de la carte voulue.
++    P(X >= 1) = 1 - P(X == 0)
++    """
++    if success_count == 0:
++        return 0.0
++    prob_zero = calculate_hypergeometric(deck_size, success_count, hand_size, 0)
++    return 1.0 - prob_zero
++
++def get_probability_exactly_zero(deck_size: int, success_count: int, hand_size: int) -> float:
++    """
++    Calcule la probabilit├® de n'en piocher AUCUN.
++    """
++    if success_count == 0:
++        return 1.0
++    return calculate_hypergeometric(deck_size, success_count, hand_size, 0)
++
++def optimize_deck_size(
++    starters_count: int, 
++    garnets_count: int, 
++    core_size: int, 
++    hand_size: int = 5,
++    min_deck: int = 40,
++    max_deck: int = 60,
++    starter_threshold: float = 0.85
++) -> Dict[str, Any]:
++    """
++    D├®termine la taille de deck optimale (entre min_deck et max_deck).
++    Objectif :
++    1. Maintenir P(Starter >= 1) >= starter_threshold
++    2. Maximiser P(Garnet == 0)
++    
++    Si aucun deck ne satisfait le threshold, on favorise la consistance du starter.
++    Si garnets_count == 0, on favorise toujours la taille minimale (40) pour maximiser les starters.
++    """
++    best_size = min_deck
++    best_score = -1.0
++    
++    results = []
++    
++    # On force min_deck ├á ├¬tre au moins la taille du core
++    actual_min = max(min_deck, core_size)
++    if actual_min > max_deck:
++        raise ValueError(f"Le Core Engine ({core_size}) d├®passe la taille maximale autoris├®e ({max_deck}).")
++
++    for size in range(actual_min, max_deck + 1):
++        p_starter = get_probability_at_least_one(size, starters_count, hand_size)
++        p_no_garnet = get_probability_exactly_zero(size, garnets_count, hand_size)
++        
++        # Si aucun garnet, le score est juste la proba des starters (donc 40 sera toujours gagnant)
++        if garnets_count == 0:
++            score = p_starter
++        else:
++            # Score combin├® : probabilit├® de (Starter ET Pas de Garnet) 
++            # (Simplifi├® en multiplication ind├®pendante pour le score)
++            score = p_starter * p_no_garnet
++            
++        results.append({
++            "size": size,
++            "p_starter": p_starter,
++            "p_no_garnet": p_no_garnet,
++            "score": score
++        })
++
++    # Filtrer ceux qui respectent le threshold
++    valid_sizes = [res for res in results if res["p_starter"] >= starter_threshold]
++    
++    if valid_sizes:
++        # Parmi les valides, on prend celui qui maximise p_no_garnet (si on a des garnets)
++        # Sinon, celui qui maximise p_starter (ce qui sera la plus petite taille)
++        if garnets_count > 0:
++            best_result = max(valid_sizes, key=lambda x: (x["p_no_garnet"], x["score"]))
++        else:
++            best_result = max(valid_sizes, key=lambda x: x["p_starter"])
++    else:
++        # Aucun ne respecte le threshold, on prend simplement celui qui a le meilleur score combin├®,
++        # ou le meilleur p_starter si c'est vraiment tr├¿s bas.
++        best_result = max(results, key=lambda x: x["score"])
++
++    return {
++        "optimal_size": best_result["size"],
++        "metrics": best_result,
++        "all_results": results
++    }
+diff --git a/tests/test_engine/test_optimizer.py b/tests/test_engine/test_optimizer.py
+new file mode 100644
+index 0000000..49640ec
+--- /dev/null
++++ b/tests/test_engine/test_optimizer.py
+@@ -0,0 +1,37 @@
++import pytest
++from ygo_ultime_deck.engine.optimizer import optimize_deck_size
++
++def test_optimize_zero_garnets():
++    # Avec 0 garnets, on veut toujours maximiser les starters, donc la taille minimale (40)
++    result = optimize_deck_size(starters_count=10, garnets_count=0, core_size=30)
++    assert result["optimal_size"] == 40
++    assert result["metrics"]["p_no_garnet"] == 1.0
++
++def test_optimize_many_garnets_many_starters():
++    # 20 starters, 10 garnets. P(Starter >= 1) sera tr├¿s ├®lev├® m├¬me ├á 60 cartes.
++    # L'optimum devrait tendre vers 60 pour diluer les 10 garnets.
++    result = optimize_deck_size(starters_count=20, garnets_count=10, core_size=30)
++    assert result["optimal_size"] > 40
++    # V├®rifions que le score ├á la taille optimale est le meilleur parmi les valides
++    valid_results = [r for r in result["all_results"] if r["p_starter"] >= 0.85]
++    best_no_garnet = max(r["p_no_garnet"] for r in valid_results)
++    assert result["metrics"]["p_no_garnet"] == best_no_garnet
++
++def test_optimize_forces_smaller_deck_for_consistency():
++    # Tr├¿s peu de starters (ex: 6). ├Ç 40 cartes, P(Starter) ~ 0.57 < 0.85.
++    # Puisque aucun deck n'atteint 85%, il doit choisir le deck avec le meilleur score combin├®,
++    # ce qui favorise les petits decks car P(Starter) chute vite.
++    result = optimize_deck_size(starters_count=6, garnets_count=2, core_size=20)
++    # Dans ce cas, la perte de consistance du starter est punie par la multiplication du score.
++    # L'optimum devrait ├¬tre proche de 40.
++    assert result["optimal_size"] == 40
++
++def test_optimize_core_size_exceeds_min():
++    # Core size de 45 cartes. Le deck minimum possible est 45.
++    result = optimize_deck_size(starters_count=12, garnets_count=3, core_size=45)
++    assert result["all_results"][0]["size"] == 45
++    assert result["optimal_size"] >= 45
++
++def test_optimize_core_size_exceeds_max():
++    with pytest.raises(ValueError):
++        optimize_deck_size(starters_count=12, garnets_count=3, core_size=65)
