@@ -13,6 +13,12 @@ COUNTER_KEYWORDS = [
     r"weakness", r"vulnerable", r"stop", r"tribute", r"out"
 ]
 
+# Mots-clés indiquant une synergie ou un combo
+SYNERGY_KEYWORDS = [
+    r"synergy", r"combo", r"search", r"add", r"summon",
+    r"works well", r"recommend", r"combo with", r"special summon"
+]
+
 async def fetch_card_tips(card_name: str) -> Optional[str]:
     """
     Interroge l'API Yugipedia pour obtenir le contenu brut de la page Card_Tips de la carte.
@@ -74,29 +80,42 @@ def extract_cards_from_wikitext(text: str) -> List[str]:
         
     return list(cards)
 
-def analyze_tips_for_counters(tips_text: str) -> List[str]:
+def analyze_tips_for_counters(tips_text: str) -> Dict[str, List[str]]:
     """
-    Analyse le texte brut de la page Card_Tips pour isoler les "Ultimate Staples" potentielles.
-    Utilise des Regex sur les phrases pour identifier le contexte (Contre/Faiblesse).
+    Analyse le texte brut de la page Card_Tips pour isoler les contres et les synergies.
     """
     if not tips_text:
-        return []
+        return {"counters": [], "synergies": []}
         
     found_counters = set()
+    found_synergies = set()
     
     # Découper le texte en phrases ou lignes (les listes sont souvent sur une ligne)
     lines = tips_text.split('\n')
     
-    # Construire la regex combinée pour les mots-clés
-    pattern = re.compile(r'\b(?:' + '|'.join(COUNTER_KEYWORDS) + r')\b', re.IGNORECASE)
+    counter_pattern = re.compile(r'\b(?:' + '|'.join(COUNTER_KEYWORDS) + r')\b', re.IGNORECASE)
+    synergy_pattern = re.compile(r'\b(?:' + '|'.join(SYNERGY_KEYWORDS) + r')\b', re.IGNORECASE)
     
     for line in lines:
-        if pattern.search(line):
-            # Si la ligne contient un mot-clé de contre, on extrait toutes les cartes mentionnées
+        is_counter = counter_pattern.search(line)
+        is_synergy = synergy_pattern.search(line)
+        
+        # Si la ligne contient un mot-clé, on extrait toutes les cartes mentionnées
+        if is_counter or is_synergy:
             cards = extract_cards_from_wikitext(line)
-            found_counters.update(cards)
+            if is_counter and not is_synergy:
+                found_counters.update(cards)
+            elif is_synergy and not is_counter:
+                found_synergies.update(cards)
+            else:
+                # Si les deux mots-clés sont présents (ambigu), on met par défaut dans synergies
+                # car Card_Tips parle souvent de synergies.
+                found_synergies.update(cards)
             
-    return list(found_counters)
+    return {
+        "counters": list(found_counters),
+        "synergies": list(found_synergies)
+    }
 
 async def scout_card(card_name: str) -> Dict[str, any]:
     """
@@ -104,7 +123,12 @@ async def scout_card(card_name: str) -> Dict[str, any]:
     """
     tips_text = await fetch_card_tips(card_name)
     if not tips_text:
-        return {"card": card_name, "found": False, "counters": []}
+        return {"card": card_name, "found": False, "counters": [], "synergies": []}
         
-    counters = analyze_tips_for_counters(tips_text)
-    return {"card": card_name, "found": True, "counters": counters}
+    analysis = analyze_tips_for_counters(tips_text)
+    return {
+        "card": card_name, 
+        "found": True, 
+        "counters": analysis["counters"],
+        "synergies": analysis["synergies"]
+    }

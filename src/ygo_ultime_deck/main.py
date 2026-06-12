@@ -316,18 +316,27 @@ def scout(
         return
         
     counters = result.get("counters", [])
-    if not counters:
+    synergies = result.get("synergies", [])
+    
+    if not counters and not synergies:
         console.print("[yellow]Aucun contre ou synergie directe identifié via l'analyse sémantique.[/yellow]")
         return
         
-    table = Table(title=f"Contres et Synergies détectés pour {card}", box=box.ROUNDED)
-    table.add_column("Cartes Mentionnées", style="green")
-    
-    for c in counters:
-        table.add_row(c)
+    if counters:
+        table_c = Table(title=f"Contres potentiels détectés", box=box.ROUNDED, title_style="bold red")
+        table_c.add_column("Cartes", style="red")
+        for c in counters:
+            table_c.add_row(c)
+        console.print(table_c)
         
-    console.print(table)
-    console.print(f"[italic dim]{len(counters)} cartes potentiellement pertinentes identifiées.[/italic dim]")
+    if synergies:
+        table_s = Table(title=f"Synergies potentielles détectées", box=box.ROUNDED, title_style="bold green")
+        table_s.add_column("Cartes", style="green")
+        for s in synergies:
+            table_s.add_row(s)
+        console.print(table_s)
+        
+    console.print(f"[italic dim]{len(counters)} contres et {len(synergies)} synergies identifiés.[/italic dim]")
 
 if __name__ == "__main__":
     app()
