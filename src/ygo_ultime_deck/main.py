@@ -216,5 +216,82 @@ def audit(
     if export_success:
         console.print(f"[italic dim]Decklist exportée vers: {output}[/italic dim]")
 
+@app.command()
+def analyze(
+    deck_file: Path = typer.Option(..., "--deck", "-d", help="Chemin vers le fichier .ydk à analyser"),
+    file: Path = typer.Option(Path("config/target_combos.yaml"), "--file", "-f", help="Chemin vers le fichier YAML des combos"),
+    iterations: int = typer.Option(100000, "--iterations", "-i", help="Nombre d'itérations de simulation"),
+    hand_size: int = typer.Option(5, "--hand-size", "-h", help="Taille de la main"),
+    workers: Optional[int] = typer.Option(None, "--workers", "-w", help="Workers multiprocessing")
+):
+    """
+    Analyse un deck existant (.ydk) pour évaluer sa consistance selon vos combos.
+    """
+    from ygo_ultime_deck.engine.config_parser import parse_target_combos
+    from ygo_ultime_deck.engine.monte_carlo import run_monte_carlo_simulation
+    from ygo_ultime_deck.engine.resolver import CardResolver
+    
+    console.print(Panel.fit(f"[bold magenta]ANALYSE DE DECK : {deck_file.name}[/bold magenta]", border_style="magenta"))
+    
+    if not deck_file.exists():
+        console.print(f"[bold red]Erreur :[/bold red] Fichier introuvable {deck_file}")
+        raise typer.Exit(1)
+        
+    try:
+        request = parse_target_combos(str(file))
+    except Exception as e:
+        console.print(f"[bold red]Erreur de lecture des combos :[/bold red] {e}")
+        raise typer.Exit(1)
+        
+    ids = []
+    in_main = False
+    with open(deck_file, "r") as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("#main"):
+                in_main = True
+                continue
+            elif line.startswith("#extra") or line.startswith("!side"):
+                in_main = False
+                continue
+                
+            if in_main and line.isdigit():
+                ids.append(line)
+                
+    if not ids:
+        console.print("[bold red]Erreur :[/bold red] Aucun ID trouvé dans le Main Deck.")
+        raise typer.Exit(1)
+        
+    cache_path = Path(__file__).resolve().parent.parent.parent / "data" / "cache" / "aggregate.zip"
+    resolver = CardResolver(cache_path)
+    deck_names = resolver.resolve_ids_to_names(ids)
+    
+    console.print(f"[bold blue]Simulation Monte-Carlo sur {len(deck_names)} cartes ({iterations} itérations)[/bold blue]")
+    
+    try:
+        sim_result = asyncio.run(run_monte_carlo_simulation(deck_names, request, hand_size, iterations, workers))
+    except Exception as e:
+        console.print(f"[bold red]Erreur Simulation :[/bold red] {e}")
+        raise typer.Exit(1)
+        
+    table = Table(title="Résultat de l'Analyse", box=box.ROUNDED)
+    table.add_column("Métrique", style="cyan", no_wrap=True)
+    table.add_column("Valeur", justify="right", style="green")
+    
+    table.add_row("Taille du Deck", f"{len(deck_names)} cartes")
+    
+    if sim_result and sim_result.total_iterations > 0:
+        for combo_name, successes in sim_result.combo_success_rates.items():
+            rate = (successes / sim_result.total_iterations) * 100
+            table.add_row(f"Combo: {combo_name}", f"{rate:.2f}%")
+            
+            if combo_name in sim_result.immunity_success_rates:
+                for threat, imm_succ in sim_result.immunity_success_rates[combo_name].items():
+                    if successes > 0:
+                        imm_rate = (imm_succ / successes) * 100
+                        table.add_row(f" └─ Immunité vs {threat}", f"{imm_rate:.2f}%")
+                        
+    console.print(table)
+
 if __name__ == "__main__":
     app()

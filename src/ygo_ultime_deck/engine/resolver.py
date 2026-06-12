@@ -16,6 +16,7 @@ class CardResolver:
     def __init__(self, cache_path: Path):
         self.cache_path = cache_path
         self._name_to_id: Dict[str, int] = {}
+        self._id_to_name: Dict[str, str] = {}
         self._loaded = False
         
     def _load_database(self) -> None:
@@ -50,13 +51,27 @@ class CardResolver:
                                 continue
                                 
                             card_name = card_data.get("name")
+                            if not card_name and "text" in card_data and "en" in card_data["text"]:
+                                card_name = card_data["text"]["en"].get("name")
+                                
                             card_id = card_data.get("id")
                             
+                            # Pour résoudre du nom vers l'ID (le moteur cherche un int)
                             if card_name and card_id is not None:
                                 try:
                                     self._name_to_id[str(card_name).strip().lower()] = int(card_id)
                                 except (ValueError, TypeError):
                                     pass
+                                    
+                            # Pour résoudre de l'ID (passwords/YDK) vers le nom
+                            if card_name:
+                                pwds = card_data.get("passwords", [])
+                                if isinstance(pwds, list):
+                                    for pwd in pwds:
+                                        self._id_to_name[str(pwd)] = str(card_name)
+                                        self._id_to_name[str(pwd).zfill(8)] = str(card_name)
+                                if card_id is not None:
+                                    self._id_to_name[str(card_id)] = str(card_name)
                             
         except (zipfile.BadZipFile, json.JSONDecodeError, OSError) as e:
             logger.warning(f"Erreur lors de la lecture du cache YGOJSON : {e}")
@@ -90,3 +105,31 @@ class CardResolver:
                 ids.append(DEFAULT_MOCK_ID)
                 
         return ids
+
+    def resolve_ids_to_names(self, ids: Optional[List[str]]) -> List[str]:
+        """
+        Résout une liste d'IDs (provenant d'un fichier YDK) en liste de noms de cartes.
+        Retourne 'Inconnu' par défaut si introuvable.
+        """
+        if not ids:
+            return []
+            
+        if isinstance(ids, str):
+            ids = [ids]
+            
+        self._load_database()
+        
+        names = []
+        for card_id in ids:
+            if not card_id:
+                names.append("Inconnu")
+                continue
+                
+            resolved_name = self._id_to_name.get(str(card_id).strip())
+            if resolved_name is not None:
+                names.append(resolved_name)
+            else:
+                logger.warning(f"ID non trouvé dans la base de données : '{card_id}'.")
+                names.append("Inconnu")
+                
+        return names
