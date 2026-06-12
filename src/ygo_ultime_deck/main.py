@@ -26,30 +26,31 @@ sys.excepthook = global_exception_handler
 
 
 @app.callback(invoke_without_command=True)
-def main(
-    ctx: typer.Context,
-    update: bool = typer.Option(False, "--update", help="Télécharger et mettre à jour le cache YGOJSON"),
-):
+def main(ctx: typer.Context):
     """
     [bold green]YGO ULTIME DECK[/bold green] - Moteur mathématique et analytique pour Yu-Gi-Oh!
     """
-    if update:
-        import httpx
-        from ygo_ultime_deck.ingestion.downloader import download_ygojson
-
-        target_path = Path(__file__).resolve().parent.parent.parent / "data" / "cache" / "aggregate.zip"
-        try:
-            asyncio.run(download_ygojson(target_path=target_path))
-            console.print("[bold green]Téléchargement terminé avec succès ![/bold green]")
-        except httpx.HTTPError as e:
-            console.print(f"[bold red]Erreur réseau lors du téléchargement :[/bold red] {e}")
-            raise typer.Exit(1)
-        except Exception as e:
-            console.print(f"[bold red]Erreur inattendue :[/bold red] {e}")
-            raise typer.Exit(1)
-            
-    elif ctx.invoked_subcommand is None:
+    if ctx.invoked_subcommand is None:
         console.print(ctx.get_help())
+
+@app.command()
+def update():
+    """
+    Télécharger et mettre à jour le cache YGOJSON.
+    """
+    import httpx
+    from ygo_ultime_deck.ingestion.downloader import download_ygojson
+
+    target_path = Path(__file__).resolve().parent.parent.parent / "data" / "cache" / "aggregate.zip"
+    try:
+        asyncio.run(download_ygojson(target_path=target_path))
+        console.print("[bold green]Téléchargement terminé avec succès ![/bold green]")
+    except httpx.HTTPError as e:
+        console.print(f"[bold red]Erreur réseau lors du téléchargement :[/bold red] {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Erreur inattendue :[/bold red] {e}")
+        raise typer.Exit(1)
 
 @app.command()
 def simulate(
