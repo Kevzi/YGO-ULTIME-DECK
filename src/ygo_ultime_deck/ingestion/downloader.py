@@ -5,7 +5,7 @@ import aiofiles
 from pathlib import Path
 from rich.progress import Progress
 
-DEFAULT_URL = "https://json.yugioh.com/api/v0.6.0/aggregate.zip"
+DEFAULT_URL = "https://github.com/iconmaster5326/YGOJSON/releases/download/v1/aggregate.zip"
 
 async def download_ygojson(target_path: Path, url: str = DEFAULT_URL) -> None:
     """Download YGOJSON zip file asynchronously.
@@ -16,7 +16,7 @@ async def download_ygojson(target_path: Path, url: str = DEFAULT_URL) -> None:
     """
     target_path.parent.mkdir(parents=True, exist_ok=True)
     
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
         try:
             async with client.stream("GET", url) as response:
                 response.raise_for_status()
