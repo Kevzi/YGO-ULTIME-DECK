@@ -1,25 +1,27 @@
-# Fichier de configuration des combos ("Mains de Rêve")
-# ----------------------------------------------------
-# Chaque combo définit un scénario de victoire.
-# Le moteur va analyser la main piochée et vérifier si elle 
-# satisfait l'un de ces combos.
-
 combos:
-  - name: "Full Combo (Standard)"
+  - name: "Starter : Rotary (Full Combo)"
     requirements:
-      - name: "Starter"
+      - name: "Kewl Tune Rotary"
         count: 1
-      - name: "Extender"
+        
+  - name: "Starter : Reco (Full Combo)"
+    requirements:
+      - name: "Kewl Tune Reco"
+        count: 1
+        
+  - name: "Starter : Field Spell (JJ)"
+    requirements:
+      - name: 'JJ "Kewl Tune"'
+        count: 1
+        
+  - name: "Starter : Synchro Overtake"
+    requirements:
+      - name: "Synchro Overtake"
         count: 1
 
-  - name: "Combo Sécurisé (Anti-Handtrap)"
+  - name: "God Hand: Combo + Anti-Handtrap"
     requirements:
-      - name: "Starter"
+      - name: "Kewl Tune Rotary"
         count: 1
-      - name: "Protection"
-        count: 1
-
-  - name: "One-Card Combo (Minimal)"
-    requirements:
-      - name: "1-Card-Starter"
+      - name: "Called by the Grave"
         count: 1
