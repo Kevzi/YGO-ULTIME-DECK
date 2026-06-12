@@ -293,5 +293,41 @@ def analyze(
                         
     console.print(table)
 
+@app.command()
+def scout(
+    card: str = typer.Argument(..., help="Nom de la carte à analyser sur Yugipedia")
+):
+    """
+    Interroge Yugipedia pour extraire les astuces et contres potentiels d'une carte.
+    """
+    from ygo_ultime_deck.ingestion.scout import scout_card
+    
+    console.print(Panel.fit(f"[bold magenta]SCOUT YUGIPEDIA : {card}[/bold magenta]", border_style="magenta"))
+    
+    with console.status(f"[cyan]Interrogation de l'API Yugipedia pour '{card}'...[/cyan]"):
+        try:
+            result = asyncio.run(scout_card(card))
+        except Exception as e:
+            console.print(f"[bold red]Erreur lors du scraping :[/bold red] {e}")
+            raise typer.Exit(1)
+            
+    if not result.get("found"):
+        console.print(f"[bold yellow]Aucune page 'Card_Tips' trouvée pour {card}.[/bold yellow]")
+        return
+        
+    counters = result.get("counters", [])
+    if not counters:
+        console.print("[yellow]Aucun contre ou synergie directe identifié via l'analyse sémantique.[/yellow]")
+        return
+        
+    table = Table(title=f"Contres et Synergies détectés pour {card}", box=box.ROUNDED)
+    table.add_column("Cartes Mentionnées", style="green")
+    
+    for c in counters:
+        table.add_row(c)
+        
+    console.print(table)
+    console.print(f"[italic dim]{len(counters)} cartes potentiellement pertinentes identifiées.[/italic dim]")
+
 if __name__ == "__main__":
     app()
